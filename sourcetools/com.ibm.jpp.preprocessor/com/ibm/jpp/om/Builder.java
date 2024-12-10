@@ -20,7 +20,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0 OR GPL-2.0-only WITH OpenJDK-assembly-exception-1.0
  */
 package com.ibm.jpp.om;
-
+import com.ibm.jzos.FileAttribute;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -328,9 +328,9 @@ public class Builder {
 					File sourceFile = new File(sourceDir, buildFile);
 					File outputFile = new File(outputDir, buildFile);
 					File metadataFile = new File(metadataDir, buildFile + ".jppmd");
-
+					System.err.println("BUILD: " + outputFile.getAbsolutePath().toString());
 					notifyBuildFileBegin(sourceFile, outputFile, buildFile);
-
+					FileAttribute.Tag tag = new FileAttribute.Tag(FileAttribute.Tag.CCSID_IBM_1047, true);
 					try (OutputStream metadataOutput = new PhantomOutputStream(metadataFile);
 						 OutputStream output = new PhantomOutputStream(outputFile, force)) {
 
@@ -364,6 +364,10 @@ public class Builder {
 							handlePreprocessorException(t, sourceFile);
 						}
 
+						if (included && outputFile.exists()) {
+							//FileAttribute.setTag(outputFile.getAbsolutePath().toString(), tag);
+							logger.log("MADE IT " + outputFile.getAbsolutePath() + ", preprocess failed.", 1);
+						}
 						if (!included && outputFile.exists()) {
 							outputFile.delete();
 						}
@@ -375,6 +379,8 @@ public class Builder {
 						getLogger().log("Exception occured in file " + sourceFile.getAbsolutePath() + ", preprocess failed.", 3, t);
 						handleBuildException(t);
 					} finally {
+						if (outputFile.exists()) {
+						FileAttribute.setTag(outputFile.getAbsolutePath().toString(), tag);}
 						notifyBuildFileEnd(sourceFile, outputFile, buildFile);
 					}
 				}

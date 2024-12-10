@@ -523,6 +523,7 @@ public class Main implements Constants {
 	 */
 	private static void writeToDisk(File file, String desiredContent) throws IOException {
 		if (differentFromCopyOnDisk(file.getPath(), desiredContent)) {
+			System.err.println("TEST FILE: " + file.getPath());
 			System.out.println("** Writing " + file.getPath());
 			file.delete();
 

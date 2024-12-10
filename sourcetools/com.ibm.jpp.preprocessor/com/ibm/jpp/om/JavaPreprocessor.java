@@ -21,6 +21,7 @@
  */
 package com.ibm.jpp.om;
 
+import com.ibm.jzos.FileAttribute;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -235,6 +236,8 @@ public class JavaPreprocessor {
 		this.inFile = inputFile;
 		this.out = new OutputStreamWriter(out, charset);
 
+               // System.err.println("OPENJ9 CHARSET: " + charset);
+               // System.err.println("OPENJ9 FILE: " + (inputFile.getAbsolutePath()).toString());
 		if (metadataOut != null) {
 			this.metadataOut = new OutputStreamWriter(metadataOut, charset);
 			try {
@@ -246,6 +249,7 @@ public class JavaPreprocessor {
 				error("IOException on write: " + ex.getMessage(), ex);
 			}
 		}
+               // System.err.println("OPENJ9 OUTPUT FILE: " + outputFile); //+ (outputFile.getAbsolutePath()).toString());
 	}
 
 	/**
