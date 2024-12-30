@@ -20,7 +20,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0 OR GPL-2.0-only WITH OpenJDK-assembly-exception-1.0
  */
 package com.ibm.oti.VMCPTool;
-
+import com.ibm.jzos.FileAttribute;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -529,6 +529,8 @@ public class Main implements Constants {
 
 			try (FileWriter fw = new FileWriter(file.getPath())) {
 				fw.write(desiredContent);
+                                FileAttribute.Tag tag = new FileAttribute.Tag(FileAttribute.Tag.CCSID_ISO_8859_1, true);
+		                FileAttribute.setTag(file.getPath().toString(), tag);
 			}
 		} else if (verbose) {
 			System.out.println("** Skipped writing [same as on file system]: " + file.getPath());

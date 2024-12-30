@@ -139,6 +139,7 @@ add_custom_command(
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/nls.stamp"
 	DEPENDS j9nls ${nls_files}
 	COMMAND "${Java_JAVA_EXECUTABLE}" -cp "$<TARGET_PROPERTY:j9nls,JAR_FILE>" com.ibm.oti.NLSTool.J9NLS -source "${CMAKE_CURRENT_SOURCE_DIR}"
+	COMMAND find "${CMAKE_CURRENT_BINARY_DIR}/nls" -name "*.h" -exec chtag -t -c ISO8859-1 {} \;
 	COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_CURRENT_BINARY_DIR}/nls.stamp"
 	COMMENT "Generating NLS files"
 	VERBATIM
