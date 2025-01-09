@@ -21,6 +21,9 @@
  */
 package com.ibm.oti.VMCPTool;
 
+/*[IF PLATFORM-mz31 | PLATFORM-mz64]*/
+import com.ibm.jzos.FileAttribute;
+/*[ENDIF] PLATFORM-mz31 | PLATFORM-mz64]*/
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -528,6 +531,10 @@ public class Main implements Constants {
 
 			try (FileWriter fw = new FileWriter(file.getPath())) {
 				fw.write(desiredContent);
+				/*[IF PLATFORM-mz31 | PLATFORM-mz64]*/
+				FileAttribute.Tag tag = new FileAttribute.Tag(FileAttribute.Tag.CCSID_ISO_8859_1, true);
+				FileAttribute.setTag(file.getPath().toString(), tag);
+				/*[ENDIF] PLATFORM-mz31 | PLATFORM-mz64]*/
 			}
 		} else if (verbose) {
 			System.out.println("** Skipped writing [same as on file system]: " + file.getPath());

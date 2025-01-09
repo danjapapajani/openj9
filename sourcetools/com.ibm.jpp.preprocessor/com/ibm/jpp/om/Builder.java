@@ -21,6 +21,9 @@
  */
 package com.ibm.jpp.om;
 
+/*[IF PLATFORM-mz31 | PLATFORM-mz64]*/
+import com.ibm.jzos.FileAttribute;
+/*[ENDIF] PLATFORM-mz31 | PLATFORM-mz64]*/
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -375,6 +378,12 @@ public class Builder {
 						getLogger().log("Exception occured in file " + sourceFile.getAbsolutePath() + ", preprocess failed.", 3, t);
 						handleBuildException(t);
 					} finally {
+						/*[IF PLATFORM-mz31 | PLATFORM-mz64]*/
+						if (outputFile.exists()) {
+							FileAttribute.Tag tag = new FileAttribute.Tag(FileAttribute.Tag.CCSID_IBM_1047, true);
+							FileAttribute.setTag(outputFile.getAbsolutePath().toString(), tag);
+						}
+						/*[ENDIF] PLATFORM-mz31	| PLATFORM-mz64]*/
 						notifyBuildFileEnd(sourceFile, outputFile, buildFile);
 					}
 				}
