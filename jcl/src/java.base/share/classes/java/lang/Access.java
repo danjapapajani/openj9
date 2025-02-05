@@ -35,7 +35,6 @@ import java.lang.StringConcatHelper;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
-import java.security.AccessControlContext;
 import java.util.Map;
 
 import com.ibm.oti.reflect.AnnotationParser;
@@ -173,7 +172,7 @@ final class Access implements JavaLangAccess {
 /*[IF JAVA_SPEC_VERSION < 24]*/
 	/*[PR CMVC 199693] Prevent trusted method chain attack. */
 	@SuppressWarnings("removal")
-	public Thread newThreadWithAcc(Runnable runnable, AccessControlContext acc) {
+	public Thread newThreadWithAcc(Runnable runnable, java.security.AccessControlContext acc) {
 		return new Thread(runnable, acc);
 	}
 /*[ENDIF] JAVA_SPEC_VERSION < 24 */
@@ -551,6 +550,7 @@ final class Access implements JavaLangAccess {
 		return moduleLayer.addEnableNativeAccess(moduleName);
 	}
 
+	/*[IF JAVA_SPEC_VERSION < 25]*/
 	@Override
 	public int getCharsLatin1(long i, int index, byte[] buf) {
 		return StringLatin1.getChars(i, index, buf);
@@ -560,6 +560,7 @@ final class Access implements JavaLangAccess {
 	public int getCharsUTF16(long i, int index, byte[] buf) {
 		return StringUTF16.getChars(i, index, buf);
 	}
+	/*[ENDIF] JAVA_SPEC_VERSION < 25 */
 
 	@Override
 	public void putCharUTF16(byte[] val, int index, int c) {
@@ -583,9 +584,7 @@ final class Access implements JavaLangAccess {
 		return StringConcatHelper.mix(lengthCoder, value);
 	}
 
-	/*[IF !INLINE-TYPES]*/
 	@Override
-	/*[ENDIF] !INLINE-TYPES */
 	public PrintStream initialSystemErr() {
 		return System.initialErr;
 	}
@@ -868,9 +867,7 @@ final class Access implements JavaLangAccess {
 		return VirtualThread.defaultScheduler();
 	}
 
-	/*[IF !INLINE-TYPES]*/
 	@Override
-	/*[ENDIF] !INLINE-TYPES */
 	public Stream<ScheduledExecutorService> virtualThreadDelayedTaskSchedulers() {
 		return VirtualThread.delayedTaskSchedulers();
 	}

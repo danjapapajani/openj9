@@ -325,7 +325,7 @@ J9VMDllMain(J9JavaVM *vm, IDATA stage, void *reserved)
 		 *  are processed so it's Ok to use stack space.
 		 */
 		opts[0] = UT_FORMAT_KEYWORD;
-		j9str_printf(PORTLIB, tempPath, sizeof(tempPath), "%s" DIR_SEPARATOR_STR "lib;.", javahome);
+		j9str_printf(tempPath, sizeof(tempPath), "%s" DIR_SEPARATOR_STR "lib;.", javahome);
 
 		opts[1] = tempPath;
 		opts[2] = NULL;
@@ -933,6 +933,11 @@ static void displayTraceHelp(J9JavaVM *vm)
 	j9tty_err_printf(PORTLIB, "     resumecount=nn                      Trigger count for \"trace resume\"\n");
 	j9tty_err_printf(PORTLIB, "     output=filespec[,nnm[,generations]] Sends maximal and minimal trace to a file\n");
 	j9tty_err_printf(PORTLIB, "     exception.output=filespec[,nnnm]    Sends exception trace to a file\n");
+	j9tty_err_printf(PORTLIB, "     maxstringlength=nn                  Limit length of string values to capture\n");
+	j9tty_err_printf(PORTLIB, "                                         "
+			"Maximum " J9_STR(RAS_MAX_STRING_LENGTH_LIMIT)
+			", use 0 to disable."
+			" Default: " J9_STR(RAS_MAX_STRING_LENGTH_DEFAULT) "\n");
 	j9tty_err_printf(PORTLIB, "     stackdepth=nn                       Set number of frames output by jstacktrace trigger action\n");
 	j9tty_err_printf(PORTLIB, "     sleeptime=nnt                       Time delay for sleep trigger action\n");
 	j9tty_err_printf(PORTLIB, "                                         Recognised suffixes: ms (milliseconds), s (seconds). Default: ms\n");

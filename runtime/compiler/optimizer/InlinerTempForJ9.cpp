@@ -87,7 +87,6 @@ namespace TR { class SimpleRegex; }
 #define OWNING_METHOD_MAY_NOT_BE_THE_CALLER (1)
 
 #define MIN_NUM_CALLERS 20
-#define MIN_FAN_IN_SIZE 50
 #define SIZE_MULTIPLIER 4
 #define FANIN_OTHER_BUCKET_THRESHOLD 0.5
 #define DEFAULT_CONST_CLASS_WEIGHT 10
@@ -133,12 +132,12 @@ static int32_t getJ9InitialBytecodeSize(TR_ResolvedMethod * feMethod, TR::Resolv
       size >>= 1;
       }
 
-    else if (feMethod->isDAAWrapperMethod())
+    else if (((TR_ResolvedJ9Method*)feMethod)->isDAAWrapperMethod())
       {
       size = 1;
       }
 
-    else if (feMethod->isDAAIntrinsicMethod())
+    else if (((TR_ResolvedJ9Method*)feMethod)->isDAAIntrinsicMethod())
       {
       size >>= 3;
       }
@@ -348,7 +347,7 @@ TR_J9InlinerPolicy::alwaysWorthInlining(TR_ResolvedMethod * calleeMethod, TR::No
    if (isInlineableJNI(calleeMethod, callNode))
       return true;
 
-   if (calleeMethod->isDAAWrapperMethod())
+   if (((TR_ResolvedJ9Method*)calleeMethod)->isDAAWrapperMethod())
       return true;
 
    if (isJSR292AlwaysWorthInlining(calleeMethod))
@@ -2517,7 +2516,8 @@ TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol, TR:
        !comp()->fej9()->traceableMethodsCanBeInlined()))
       return false;
 
-   static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+   bool disableCASInlining = !comp()->cg()->getSupportsInlineUnsafeCompareAndSet();
+   bool disableCAEInlining = !comp()->cg()->getSupportsInlineUnsafeCompareAndExchange();
    // I am not sure if having the same type between C/S and B/Z matters here.. ie. if the type is being used as the only distinguishing factor
    switch (callNode->getSymbol()->castToResolvedMethodSymbol()->getRecognizedMethod())
       {
@@ -2705,18 +2705,21 @@ TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol, TR:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeObject:
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
-         if (disableCAEIntrinsic)
+         if (disableCAEInlining || callNode->isSafeForCGToFastPathUnsafeCall())
             {
-            break;
+            return false;
             }
-         // Fallthrough if previous if condition is not met.
+         return createUnsafeCASCallDiamond(callNodeTreeTop, callNode);
+
       case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
       case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
       case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
-         if (callNode->isSafeForCGToFastPathUnsafeCall())
+         if (disableCASInlining || callNode->isSafeForCGToFastPathUnsafeCall())
+            {
             return false;
+            }
 #if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
-         if(TR::Compiler->om.isOffHeapAllocationEnabled())
+         if (TR::Compiler->om.isOffHeapAllocationEnabled())
             return createUnsafeCASCallDiamond(callNodeTreeTop, callNode);
 #endif /* J9VM_GC_SPARSE_HEAP_ALLOCATION */
          switch (callerSymbol->castToMethodSymbol()->getRecognizedMethod())
@@ -2928,11 +2931,8 @@ TR_J9InlinerPolicy::adjustFanInSizeInWeighCallSite(int32_t& weight,
       if (comp()->getMethodHotness() > warm)
          return;
 
-      static const char *qq = feGetEnv("TR_Min_FanIn_Size");
-      static const uint32_t min_size = ( qq ) ? atoi(qq) : MIN_FAN_IN_SIZE;
-
       uint32_t thresholdSize = (!comp()->getOption(TR_InlinerFanInUseCalculatedSize)) ? getJ9InitialBytecodeSize(callee, 0, comp()) : size;
-      if (thresholdSize <= min_size)  // if we are less than min_fan_in size, we don't want to apply fan-in heuristic
+      if (thresholdSize <= TR::Options::_iprofilerFaninMethodMinSize)  // if we are less than min_fan_in size, we don't want to apply fan-in heuristic
          {
          return;
          }
@@ -3043,15 +3043,12 @@ TR_J9InlinerPolicy::adjustFanInSizeInExceedsSizeThreshold(int bytecodeSize,
    static const char *q = feGetEnv("TR_SizeMultiplier");
    static const uint32_t multiplier = ( q ) ? atoi (q) : SIZE_MULTIPLIER;
 
-   static const char *qq = feGetEnv("TR_Min_FanIn_Size");
-   static const uint32_t min_size = ( qq ) ? atoi(qq) : MIN_FAN_IN_SIZE;
-
    static const char *qqq = feGetEnv("TR_OtherBucketThreshold");
    static const float otherBucketThreshold = (qqq) ? (float) (atoi (qqq) /100.0) : FANIN_OTHER_BUCKET_THRESHOLD;
 
 
    uint32_t thresholdSize = (!comp()->getOption(TR_InlinerFanInUseCalculatedSize)) ? getJ9InitialBytecodeSize(callee, 0, comp()) : calculatedSize;
-   if (thresholdSize <= min_size)  // if we are less than min_fan_in size, we don't want to apply fan-in heuristic
+   if (thresholdSize <= TR::Options::_iprofilerFaninMethodMinSize)  // if we are less than min_fan_in size, we don't want to apply fan-in heuristic
       {
       return false;
       }
@@ -4291,8 +4288,19 @@ void TR_MultipleCallTargetInliner::weighCallSite( TR_CallStack * callStack , TR_
 
                if (size > 0)
                   {
+                  int32_t exemptionFreqCutoff = comp()->getOptions()->getLargeCompiledMethodExemptionFreqCutoff();
+                  int32_t veryLargeCompiledMethodThreshold = comp()->getOptions()->getInlinerVeryLargeCompiledMethodThreshold();
+                  int32_t veryLargeCompiledMethodFaninThreshold = comp()->getOptions()->getInlinerVeryLargeCompiledMethodFaninThreshold();
+
+                  static const char *cmt = feGetEnv("TR_CompiledMethodCallGraphThreshold");
+                  if (cmt)
+                     {
+                     static const int32_t callGraphSizeBasedThreshold = atoi(cmt);
+                     veryLargeCompiledMethodThreshold = callGraphSizeBasedThreshold;
+                     }
+
                   bool largeCompiledCallee = !comp()->getOption(TR_InlineVeryLargeCompiledMethods) &&
-                                             isLargeCompiledMethod(calltarget->_calleeMethod, size, frequency2);
+                                             isLargeCompiledMethod(calltarget->_calleeMethod, size, frequency2, exemptionFreqCutoff, veryLargeCompiledMethodThreshold, veryLargeCompiledMethodFaninThreshold);
                   if (largeCompiledCallee)
                      {
                      size = size*TR::Options::_inlinerVeryLargeCompiledMethodAdjustFactor;
@@ -4452,7 +4460,7 @@ void TR_MultipleCallTargetInliner::weighCallSite( TR_CallStack * callStack , TR_
 
       weight = applyArgumentHeuristics(map,weight, calltarget);
 
-      if (calltarget->_calleeMethod->isDAAWrapperMethod())
+      if (((TR_ResolvedJ9Method*)calltarget->_calleeMethod)->isDAAWrapperMethod())
          {
          weight = 1;
          heuristicTrace(tracer(),"Setting DAA wrapper methods weights to minimum(%d).", weight);
@@ -4653,8 +4661,19 @@ int32_t TR_MultipleCallTargetInliner::scaleSizeBasedOnBlockFrequency(int32_t byt
    {
    int32_t maxFrequency = MAX_BLOCK_COUNT + MAX_COLD_BLOCK_COUNT;
 
+   int32_t exemptionFreqCutoff = comp()->getOptions()->getLargeCompiledMethodExemptionFreqCutoff();
+   int32_t veryLargeCompiledMethodThreshold = comp()->getOptions()->getInlinerVeryLargeCompiledMethodThreshold();
+   int32_t veryLargeCompiledMethodFaninThreshold = comp()->getOptions()->getInlinerVeryLargeCompiledMethodFaninThreshold();
+
+   static const char *bcmt = feGetEnv("TR_CompiledMethodByteCodeThreshold");
+   if (bcmt)
+      {
+      static const int32_t byteCodeSizeBasedThreshold = atoi(bcmt);
+      veryLargeCompiledMethodThreshold = byteCodeSizeBasedThreshold;
+      }
+
    bool largeCompiledCallee = !comp()->getOption(TR_InlineVeryLargeCompiledMethods) &&
-                              isLargeCompiledMethod(calleeResolvedMethod, bytecodeSize, frequency);
+                              isLargeCompiledMethod(calleeResolvedMethod, bytecodeSize, frequency, exemptionFreqCutoff, veryLargeCompiledMethodThreshold, veryLargeCompiledMethodFaninThreshold);
    if (largeCompiledCallee)
       {
       bytecodeSize = bytecodeSize * TR::Options::_inlinerVeryLargeCompiledMethodAdjustFactor;
@@ -4693,7 +4712,7 @@ int32_t TR_MultipleCallTargetInliner::scaleSizeBasedOnBlockFrequency(int32_t byt
    }
 
 
-bool TR_MultipleCallTargetInliner::isLargeCompiledMethod(TR_ResolvedMethod *calleeResolvedMethod, int32_t bytecodeSize, int32_t callerBlockFrequency)
+bool TR_MultipleCallTargetInliner::isLargeCompiledMethod(TR_ResolvedMethod *calleeResolvedMethod, int32_t bytecodeSize, int32_t callerBlockFrequency, int32_t exemptionFreqCutoff, int32_t veryLargeCompiledMethodThreshold, int32_t veryLargeCompiledMethodFaninThreshold)
    {
    TR_OpaqueMethodBlock* methodCallee = calleeResolvedMethod->getPersistentIdentifier();
    if (!calleeResolvedMethod->isInterpreted())
@@ -4711,27 +4730,34 @@ bool TR_MultipleCallTargetInliner::isLargeCompiledMethod(TR_ResolvedMethod *call
                }
 
             // Allow inlining of big methods into high frequency blocks
-            if (callerBlockFrequency > comp()->getOptions()->getLargeCompiledMethodExemptionFreqCutoff())
+            if (callerBlockFrequency > exemptionFreqCutoff)
                return false;
 
-            int32_t veryLargeCompiledMethodThreshold = comp()->getOptions()->getInlinerVeryLargeCompiledMethodThreshold();
-            int32_t veryLargeCompiledMethodFaninThreshold = comp()->getOptions()->getInlinerVeryLargeCompiledMethodFaninThreshold();
             // Subdue inliner in low frequency blocks
             if (callerBlockFrequency > 0)
                {
-               if ((2 * callerBlockFrequency) < comp()->getOptions()->getLargeCompiledMethodExemptionFreqCutoff())
+               if ((2 * callerBlockFrequency) < exemptionFreqCutoff)
                   {
                   veryLargeCompiledMethodThreshold = 100;
                   veryLargeCompiledMethodFaninThreshold = 0;
                   }
                }
-
-            uint32_t numCallers = 0, totalWeight = 0;
-            ((TR_ResolvedJ9Method *) calleeResolvedMethod)->getFaninInfo(&numCallers, &totalWeight);
-            if ((numCallers > veryLargeCompiledMethodFaninThreshold) &&
-                (bytecodeSize > veryLargeCompiledMethodThreshold))
+            // Prevent inlining of "large" methods with "many" callers
+            if (bytecodeSize > veryLargeCompiledMethodThreshold)
                {
-               return true;
+               uint32_t numCallers = 0, totalWeight = 0;
+               if (!comp()->getOption(TR_DisableInlinerFanIn))
+                  ((TR_ResolvedJ9Method *) calleeResolvedMethod)->getFaninInfo(&numCallers, &totalWeight);
+               if (numCallers == 0) // no fanin info
+                  {
+                  // If there is no fanin info, prevent inlining just based on method size
+                  return true;
+                  }
+               else
+                  {
+                  if (numCallers > veryLargeCompiledMethodFaninThreshold)
+                     return true;
+                  }
                }
             }
          }
@@ -4978,11 +5004,9 @@ TR_MultipleCallTargetInliner::exceedsSizeThreshold(TR_CallSite *callSite, int by
  */
        }
 
-   static const char *qq;
-   static uint32_t min_size = ( qq = feGetEnv("TR_Min_FanIn_Size")) ? atoi(qq) : MIN_FAN_IN_SIZE;
    static const char *q;
    static uint32_t multiplier = ( q = feGetEnv("TR_SizeMultiplier")) ? atoi (q) : SIZE_MULTIPLIER;
-   uint32_t calculatedSize = bytecodeSize; //(bytecodeSize - MIN_FAN_IN_SIZE);
+   uint32_t calculatedSize = bytecodeSize;
 
    if (!comp()->getOption(TR_DisableInlinerFanIn))  // TODO: make the default for everybody
       {
@@ -5406,6 +5430,9 @@ TR_J9InlinerPolicy::supressInliningRecognizedInitialCallee(TR_CallSite* callsite
 
       // DAA Packed Decimal check method
       case TR::com_ibm_dataaccess_PackedDecimal_checkPackedDecimal_:
+
+      // DAA External Decimal check method
+      case TR::com_ibm_dataaccess_ExternalDecimal_checkExternalDecimal_:
 
       // DAA Packed Decimal <-> Integer
       case TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToInteger_:
@@ -5941,8 +5968,8 @@ TR_InlinerFailureReason
        rm == TR::java_lang_Math_max_D ||
        rm == TR::java_lang_Math_min_D ||
        //DAA Intrinsic methods will get reduced if intrinsics are on, so don't consider it as a target
-       (resolvedMethod->isDAAMarshallingIntrinsicMethod() && !comp->getOption(TR_DisableMarshallingIntrinsics)) ||
-       (resolvedMethod->isDAAPackedDecimalIntrinsicMethod() && !comp->getOption(TR_DisablePackedDecimalIntrinsics)) ||
+       (((TR_ResolvedJ9Method*)resolvedMethod)->isDAAMarshallingIntrinsicMethod() && !comp->getOption(TR_DisableMarshallingIntrinsics)) ||
+       (((TR_ResolvedJ9Method*)resolvedMethod)->isDAAPackedDecimalIntrinsicMethod() && !comp->getOption(TR_DisablePackedDecimalIntrinsics)) ||
 
       // dont inline methods that contain the NumberFormat pattern
       // this is because we want to catch the opportunity with stringpeepholes

@@ -151,7 +151,8 @@ _X(JVM_CountStackFrames,JNICALL,true,jobject,jint arg0, jint arg1)
 _X(JVM_CurrentThread,JNICALL,true,jobject,JNIEnv *env, jclass java_lang_Thread)
 _X(JVM_DesiredAssertionStatus,JNICALL,true,jboolean,JNIEnv *env, jobject arg1, jobject arg2)
 _X(JVM_DisableCompiler,JNICALL,true,jobject,jint arg0, jint arg1)
-_X(JVM_DoPrivileged,JNICALL,true,jobject,JNIEnv *env, jobject java_security_AccessController, jobject action, jboolean unknown, jboolean isExceptionAction)
+_IF([(JAVA_SPEC_VERSION == 8) && defined(WIN32)],
+	[_X(JVM_DoPrivileged,JNICALL,true,jobject,JNIEnv *env, jobject java_security_AccessController, jobject action, jboolean unknown, jboolean isExceptionAction)])
 _X(JVM_EnableCompiler,JNICALL,true,jobject,jint arg0, jint arg1)
 _X(JVM_FillInStackTrace,JNICALL,true,void,JNIEnv *env, jobject throwable)
 _X(JVM_FindClassFromClassLoader,JNICALL,true,jobject,JNIEnv *env, char *className, jboolean init, jobject classLoader, jboolean throwError)
@@ -371,8 +372,6 @@ _IF([JAVA_SPEC_VERSION >= 16],
 	[_X(JVM_GetRandomSeedForDumping, JNICALL, false, jlong)])
 _IF([JAVA_SPEC_VERSION >= 15],
 	[_X(JVM_RegisterLambdaProxyClassForArchiving, JNICALL, false, void, JNIEnv *env, jclass arg1, jstring arg2, jobject arg3, jobject arg4, jobject arg5, jobject arg6, jclass arg7)])
-_IF([JAVA_SPEC_VERSION == 15],
-	[_X(JVM_LookupLambdaProxyClassFromArchive, JNICALL, false, jclass, JNIEnv *env, jclass arg1, jstring arg2, jobject arg3, jobject arg4, jobject arg5, jobject arg6, jboolean arg7)])
 _IF([JAVA_SPEC_VERSION >= 16],
 	[_X(JVM_LookupLambdaProxyClassFromArchive, JNICALL, false, jclass, JNIEnv *env, jclass arg1, jstring arg2, jobject arg3, jobject arg4, jobject arg5, jobject arg6)])
 _IF([(15 <= JAVA_SPEC_VERSION) && (JAVA_SPEC_VERSION < 23)],
@@ -403,14 +402,6 @@ _IF([JAVA_SPEC_VERSION >= 19],
 	[_X(JVM_IsContinuationsSupported, JNICALL, false, void, void)])
 _IF([JAVA_SPEC_VERSION >= 19],
 	[_X(JVM_IsPreviewEnabled, JNICALL, false, void, void)])
-_IF([(19 <= JAVA_SPEC_VERSION) && (JAVA_SPEC_VERSION < 21)],
-	[_X(JVM_VirtualThreadMountBegin, JNICALL, false, void, JNIEnv *env, jobject thread, jboolean firstMount)])
-_IF([(19 <= JAVA_SPEC_VERSION) && (JAVA_SPEC_VERSION < 21)],
-	[_X(JVM_VirtualThreadMountEnd, JNICALL, false, void, JNIEnv *env, jobject thread, jboolean firstMount)])
-_IF([(19 <= JAVA_SPEC_VERSION) && (JAVA_SPEC_VERSION < 21)],
-	[_X(JVM_VirtualThreadUnmountBegin, JNICALL, false, void, JNIEnv *env, jobject thread, jboolean lastUnmount)])
-_IF([(19 <= JAVA_SPEC_VERSION) && (JAVA_SPEC_VERSION < 21)],
-	[_X(JVM_VirtualThreadUnmountEnd, JNICALL, false, void, JNIEnv *env, jobject thread, jboolean lastUnmount)])
 _IF([JAVA_SPEC_VERSION >= 20],
 	[_X(JVM_GetClassFileVersion, JNICALL, false, jint, JNIEnv *env, jclass cls)])
 _IF([(20 <= JAVA_SPEC_VERSION) && (JAVA_SPEC_VERSION < 23)],
@@ -430,13 +421,19 @@ _IF([JAVA_SPEC_VERSION >= 21],
 _IF([JAVA_SPEC_VERSION >= 21],
 	[_X(JVM_VirtualThreadUnmount, JNICALL, false, void, JNIEnv *env, jobject vthread, jboolean hide)])
 _IF([defined(J9VM_OPT_VALHALLA_VALUE_TYPES)],
-	[_X(JVM_IsValhallaEnabled, JNICALL, false, jboolean, void)])
+	[_X(JVM_IsFlatArray, JNICALL, false, jboolean, JNIEnv *env, jclass cls)])
 _IF([defined(J9VM_OPT_VALHALLA_VALUE_TYPES)],
 	[_X(JVM_IsImplicitlyConstructibleClass, JNICALL, false, jboolean, JNIEnv *env, jclass cls)])
 _IF([defined(J9VM_OPT_VALHALLA_VALUE_TYPES)],
 	[_X(JVM_IsNullRestrictedArray, JNICALL, false, jboolean, JNIEnv *env, jobject obj)])
 _IF([defined(J9VM_OPT_VALHALLA_VALUE_TYPES)],
+	[_X(JVM_IsValhallaEnabled, JNICALL, false, jboolean, void)])
+_IF([defined(J9VM_OPT_VALHALLA_VALUE_TYPES)],
+	[_X(JVM_NewNullableAtomicArray, JNICALL, false, jarray, JNIEnv *env, jclass cls, jint length)])
+_IF([defined(J9VM_OPT_VALHALLA_VALUE_TYPES)],
 	[_X(JVM_NewNullRestrictedArray, JNICALL, false, jarray, JNIEnv *env, jclass cls, jint length)])
+_IF([defined(J9VM_OPT_VALHALLA_VALUE_TYPES)],
+	[_X(JVM_NewNullRestrictedAtomicArray, JNICALL, false, jarray, JNIEnv *env, jclass cls, jint length)])
 _IF([JAVA_SPEC_VERSION >= 22],
 	[_X(JVM_ExpandStackFrameInfo, JNICALL, false, void, JNIEnv *env, jobject object)])
 _IF([JAVA_SPEC_VERSION == 22],

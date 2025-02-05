@@ -140,6 +140,13 @@
 #define J9ArrayShape32Bit 0x2
 #define J9ArrayShape64Bit 0x3
 
+/* J9IndexableObjectLayout_xxx are used in indexableObjectLayout field in J9VMThread and J9JavaVM */
+#define J9IndexableObjectLayout_NoDataAddr_NoArraylet 0x0 /* StandardGC case */
+#define J9IndexableObjectLayout_NoDataAddr_Arraylet 0x1 /* Metronome GC case */
+#define J9IndexableObjectLayout_DataAddr_NoArraylet 0x2 /* Balanced GC Offheap enabled case */
+#define J9IndexableObjectLayout_DataAddr_Arraylet 0x3 /* Balanced GC Offheap disabled case */
+#define J9IndexableObjectLayout_DataAddrMask 0x2
+#define J9IndexableObjectLayout_ArrayletMask 0x1
 /* @ddr_namespace: map_to_type=J9ClassInitFlags */
 
 /* Constants from J9ClassInitFlags */
@@ -421,6 +428,19 @@ typedef struct J9JFRMonitorWaited {
 
 #define J9JFRMonitorWaitedED_STACKTRACE(jfrEvent) ((UDATA*)(((J9JFRMonitorWaited*)(jfrEvent)) + 1))
 
+typedef struct J9JFRThreadParked {
+	J9JFR_EVENT_WITH_STACKTRACE_FIELDS
+	I_64 time;
+	I_64 duration;
+	struct J9VMThread *thread;
+	struct J9Class *parkedClass;
+	I_64 timeOut;
+	I_64 untilTime;
+	UDATA parkedAddress;
+} J9JFRThreadParked;
+
+#define J9JFRTHREADPARKED_STACKTRACE(jfrEvent) ((UDATA*)(((J9JFRThreadParked*)(jfrEvent)) + 1))
+
 typedef struct J9JFRCPULoad {
 	J9JFR_EVENT_COMMON_FIELDS
 	float jvmUser;
@@ -439,6 +459,14 @@ typedef struct J9JFRClassLoadingStatistics {
 	I_64 loadedClassCount;
 	I_64 unloadedClassCount;
 } J9JFRClassLoadingStatistics;
+
+typedef struct J9JFRThreadStatistics {
+	J9JFR_EVENT_COMMON_FIELDS
+	U_32 activeThreadCount;
+	U_32 daemonThreadCount;
+	U_32 accumulatedThreadCount;
+	U_32 peakThreadCount;
+} J9JFRThreadStatistics;
 
 typedef struct J9JFRThreadContextSwitchRate {
 	J9JFR_EVENT_COMMON_FIELDS
@@ -3612,9 +3640,6 @@ typedef struct J9ClassLoader {
 	omrthread_rwmutex_t cpEntriesMutex;
 	UDATA initClassPathEntryCount;
 	UDATA asyncGetCallTraceUsed;
-#if defined(J9VM_OPT_JFR)
-	UDATA loadedClassCount;
-#endif /* defined(J9VM_OPT_JFR) */
 } J9ClassLoader;
 
 #define J9CLASSLOADER_SHARED_CLASSES_ENABLED  8
@@ -4768,6 +4793,7 @@ typedef struct J9MemoryManagerFunctions {
 	const char*  ( *j9gc_get_gcmodestring)(struct J9JavaVM *javaVM) ;
 	UDATA  ( *j9gc_get_object_size_in_bytes)(struct J9JavaVM* javaVM, j9object_t objectPtr) ;
 	UDATA  ( *j9gc_get_object_total_footprint_in_bytes)(struct J9JavaVM *javaVM, j9object_t objectPtr);
+	BOOLEAN ( *j9gc_get_explicit_GC_disabled)(struct J9JavaVM *javaVM) ;
 	UDATA  ( *j9gc_modron_global_collect)(struct J9VMThread *vmThread) ;
 	UDATA  ( *j9gc_modron_global_collect_with_overrides)(struct J9VMThread *vmThread, U_32 overrideFlags) ;
 	UDATA  ( *j9gc_modron_local_collect)(struct J9VMThread *vmThread) ;
@@ -5527,8 +5553,7 @@ typedef struct J9VMThread {
 	UDATA contiguousIndexableHeaderSize;
 	UDATA discontiguousIndexableHeaderSize;
 #if defined(J9VM_ENV_DATA64)
-	U_32 isIndexableDataAddrPresent;
-	U_32 isVirtualLargeObjectHeapEnabled;
+	U_32 indexableObjectLayout;
 #endif /* defined(J9VM_ENV_DATA64) */
 	void* gpInfo;
 	void* jitVMwithThreadInfo;
@@ -5647,6 +5672,10 @@ typedef struct J9VMThread {
 #endif /* defined(J9VM_OPT_JFR) */
 } J9VMThread;
 
+#if defined(J9VM_ENV_DATA64)
+#define J9VMTHREAD_IS_ARRAYLET_ENABLED(vmThread) (J9IndexableObjectLayout_ArrayletMask & (vmThread)->indexableObjectLayout)
+#define J9VMTHREAD_IS_INDEXBLE_DATAADDR_PRESENT(vmThread) (J9IndexableObjectLayout_DataAddrMask & (vmThread)->indexableObjectLayout)
+#endif
 #define J9VMTHREAD_ALIGNMENT  0x100
 #define J9VMTHREAD_RESERVED_C_STACK_FRACTION  8
 #define J9VMTHREAD_STATE_RUNNING  1
@@ -5860,6 +5889,8 @@ typedef struct J9JavaVM {
 	UDATA anonClassCount;
 	UDATA totalThreadCount;
 	UDATA daemonThreadCount;
+	UDATA accumulatedThreadCount;
+	UDATA peakThreadCount;
 	omrthread_t finalizeMainThread;
 	omrthread_monitor_t finalizeMainMonitor;
 	omrthread_monitor_t processReferenceMonitor; /* the monitor for synchronizing between reference process and j9gc_wait_for_reference_processing() (only for Java 9 and later) */
@@ -6092,8 +6123,8 @@ typedef struct J9JavaVM {
 	UDATA contiguousIndexableHeaderSize;
 	UDATA discontiguousIndexableHeaderSize;
 #if defined(J9VM_ENV_DATA64)
-	U_32 isIndexableDataAddrPresent;
-	U_32 isVirtualLargeObjectHeapEnabled;
+	UDATA isIndexableDataAddrPresent;
+	U_32 indexableObjectLayout;
 	U_32 isIndexableDualHeaderShapeEnabled;
 #endif /* defined(J9VM_ENV_DATA64) */
 	struct J9VMThread* exclusiveVMAccessQueueHead;
@@ -6284,6 +6315,9 @@ typedef struct J9JavaVM {
 	VMSnapshotImplPortLibrary *vmSnapshotImplPortLibrary;
 	const char *vmSnapshotFilePath;
 #endif /* defined(J9VM_OPT_SNAPSHOTS) */
+#if defined(J9VM_OPT_JFR)
+	UDATA loadedClassCount;
+#endif /* defined(J9VM_OPT_JFR) */
 } J9JavaVM;
 
 #define J9JFR_SAMPLER_STATE_UNINITIALIZED 0
@@ -6334,6 +6368,10 @@ typedef struct J9JavaVM {
 #define J9JAVAVM_OBJECT_HEADER_SIZE(vm) (J9JAVAVM_COMPRESS_OBJECT_REFERENCES(vm) ? sizeof(J9ObjectCompressed) : sizeof(J9ObjectFull))
 #define J9JAVAVM_CONTIGUOUS_INDEXABLE_HEADER_SIZE(vm) ((vm)->contiguousIndexableHeaderSize)
 #define J9JAVAVM_DISCONTIGUOUS_INDEXABLE_HEADER_SIZE(vm) ((vm)->discontiguousIndexableHeaderSize)
+#if defined(J9VM_ENV_DATA64)
+#define J9JAVAVM_IS_ARRAYLET_ENABLED(vm) (J9IndexableObjectLayout_ArrayletMask & (vm)->indexableObjectLayout)
+#define J9JAVAVM_IS_INDEXBLE_DATAADDR_PRESENT(vm) (J9IndexableObjectLayout_DataAddrMask & (vm)->indexableObjectLayout)eObjectLayout)
+#endif
 
 #if JAVA_SPEC_VERSION >= 16
 /* The mask for the signature type identifier */

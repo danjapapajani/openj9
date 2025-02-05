@@ -25,16 +25,18 @@ package java.lang;
 import com.ibm.oti.vm.J9UnmodifiableClass;
 import java.lang.ref.SoftReference;
 import java.lang.reflect.*;
+/*[IF JAVA_SPEC_VERSION < 24]*/
+import java.security.AccessControlContext;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+/*[ENDIF] JAVA_SPEC_VERSION < 24 */
+import java.security.CodeSource;
+import java.security.ProtectionDomain;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.WeakHashMap;
-import java.security.AccessControlContext;
-import java.security.CodeSource;
-import java.security.ProtectionDomain;
 import java.io.FileDescriptor;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -271,8 +273,11 @@ final class J9VMInternals {
 	private static native Throwable newInstance(Class exceptionClass, Class constructorClass);
 
 	private static Throwable cloneThrowable(final Throwable throwable, final HashMap hashMapThrowable) {
+		/*[IF JAVA_SPEC_VERSION < 24]*/
 		return (Throwable)AccessController.doPrivileged(new PrivilegedAction() {
+			@Override
 			public Object run() {
+		/*[ENDIF] JAVA_SPEC_VERSION < 24 */
 				Throwable clone;
 				try {
 					Class cls = throwable.getClass();
@@ -305,8 +310,10 @@ final class J9VMInternals {
 					clone = new Throwable(Msg.getString("K05c3", e, throwable.toString())); //$NON-NLS-1$
 				}
 				return clone;
+		/*[IF JAVA_SPEC_VERSION < 24]*/
 			}
 		});
+		/*[ENDIF] JAVA_SPEC_VERSION < 24 */
 	}
 
 	/**
@@ -385,13 +392,13 @@ final class J9VMInternals {
 		}
 	}
 
+	/*[IF JAVA_SPEC_VERSION < 24]*/
 	/*[PR CVMC 124584] checkPackageAccess(), not defineClassImpl(), should use ProtectionDomain */
 	private static void checkPackageAccess(final Class<?> clazz, ProtectionDomain pd) {
-		/*[IF JAVA_SPEC_VERSION < 24]*/
 		@SuppressWarnings("removal")
 		final SecurityManager sm = System.getSecurityManager();
 		if (sm != null) {
-			ProtectionDomain[] pdArray = (pd == null) ? new ProtectionDomain[]{} : new ProtectionDomain[]{pd};
+			ProtectionDomain[] pdArray = (pd == null) ? new ProtectionDomain[] {} : new ProtectionDomain[] { pd };
 			AccessController.doPrivileged(new PrivilegedAction<Object>() {
 				@Override
 				public Object run() {
@@ -401,15 +408,15 @@ final class J9VMInternals {
 					}
 					if (Proxy.isProxyClass(clazz)) {
 						/*[PR CMVC 198986] Fix proxies */
-						ClassLoader	cl = clazz.getClassLoaderImpl();
+						ClassLoader cl = clazz.getClassLoaderImpl();
 						sun.reflect.misc.ReflectUtil.checkProxyPackageAccess(cl, clazz.getInterfaces());
 					}
 					return null;
 				}
 			}, new AccessControlContext(pdArray));
 		}
-		/*[ENDIF] JAVA_SPEC_VERSION < 24 */
 	}
+	/*[ENDIF] JAVA_SPEC_VERSION < 24 */
 
 	/*[PR CMVC 104341] Exceptions in Object.finalize() not ignored */
 
@@ -612,9 +619,11 @@ final class J9VMInternals {
 			ClassLoader classLoader = clazz.getClassLoader();
 			if (classLoader != null) {
 				classLoaderStr = classLoader.toString();
+				/*[IF JAVA_SPEC_VERSION < 24]*/
 				classPath = AccessController.doPrivileged(new PrivilegedAction<String>() {
 					@Override
 					public String run() {
+				/*[ENDIF] JAVA_SPEC_VERSION < 24 */
 						String path = null;
 						try {
 							ProtectionDomain pd = clazz.getProtectionDomain();
@@ -629,9 +638,13 @@ final class J9VMInternals {
 							}
 						} catch (Exception e) {
 						}
+				/*[IF JAVA_SPEC_VERSION >= 24]*/
+						classPath = path;
+				/*[ELSE] JAVA_SPEC_VERSION >= 24 */
 						return path;
 					}
 				});
+				/*[ENDIF] JAVA_SPEC_VERSION >= 24 */
 			}
 		}
 		if (classPath != null) {

@@ -65,6 +65,7 @@ enum MetadataTypeID {
 	ThreadStartID = 2,
 	ThreadEndID = 3,
 	ThreadSleepID = 4,
+	ThreadParkID = 5,
 	MonitorWaitID = 7,
 	JVMInformationID = 87,
 	OSInformationID = 88,
@@ -75,6 +76,7 @@ enum MetadataTypeID {
 	CPULoadID = 95,
 	ThreadCPULoadID = 96,
 	ThreadContextSwitchRateID = 97,
+	ThreadStatisticsID = 99,
 	ClassLoadingStatisticsID = 100,
 	PhysicalMemoryID = 108,
 	ExecutionSampleID = 109,
@@ -157,6 +159,7 @@ private:
 	static constexpr int THREAD_END_EVENT_SIZE = (4 * sizeof(U_64)) + sizeof(U_32);
 	static constexpr int THREAD_SLEEP_EVENT_SIZE = (7 * sizeof(U_64)) + sizeof(U_32);
 	static constexpr int MONITOR_WAIT_EVENT_SIZE = (9 * sizeof(U_64)) + sizeof(U_32);
+	static constexpr int THREAD_PARK_EVENT_SIZE = (9 * sizeof(U_64)) + sizeof(U_32);
 	static constexpr int JVM_INFORMATION_EVENT_SIZE = 3000;
 	static constexpr int PHYSICAL_MEMORY_EVENT_SIZE = (4 * sizeof(U_64)) + sizeof(U_32);
 	static constexpr int VIRTUALIZATION_INFORMATION_EVENT_SIZE = 50;
@@ -168,6 +171,7 @@ private:
 	static constexpr int INITIAL_ENVIRONMENT_VARIABLE_EVENT_SIZE = 6000;
 	static constexpr int CLASS_LOADING_STATISTICS_EVENT_SIZE = 5 * sizeof(I_64);
 	static constexpr int THREAD_CONTEXT_SWITCH_RATE_SIZE = sizeof(float) + (3 * sizeof(I_64));
+	static constexpr int THREAD_STATISTICS_EVENT_SIZE = (6 * sizeof(U_64)) + sizeof(U_32);
 
 	static constexpr int METADATA_ID = 1;
 
@@ -339,6 +343,8 @@ done:
 
 			pool_do(_constantPoolTypes.getMonitorWaitTable(), &writeMonitorWaitEvent, _bufferWriter);
 
+			pool_do(_constantPoolTypes.getThreadParkTable(), &writeThreadParkEvent, _bufferWriter);
+
 			pool_do(_constantPoolTypes.getCPULoadTable(), &writeCPULoadEvent, _bufferWriter);
 
 			pool_do(_constantPoolTypes.getThreadCPULoadTable(), &writeThreadCPULoadEvent, _bufferWriter);
@@ -346,6 +352,8 @@ done:
 			pool_do(_constantPoolTypes.getClassLoadingStatisticsTable(), &writeClassLoadingStatisticsEvent, _bufferWriter);
 
 			pool_do(_constantPoolTypes.getThreadContextSwitchRateTable(), &writeThreadContextSwitchRateEvent, _bufferWriter);
+
+			pool_do(_constantPoolTypes.getThreadStatisticsTable(), &writeThreadStatisticsEvent, _bufferWriter);
 
 			/* Only write constant events in first chunk */
 			if (0 == _vm->jfrState.jfrChunkCount) {
@@ -553,6 +561,48 @@ done:
 	}
 
 	static void
+	writeThreadParkEvent(void *anElement, void *userData)
+	{
+		ThreadParkEntry *entry = (ThreadParkEntry *)anElement;
+		VM_BufferWriter *_bufferWriter = (VM_BufferWriter *) userData;
+
+		/* reserve size field */
+		U_8 *dataStart = _bufferWriter->getAndIncCursor(sizeof(U_32));
+
+		/* write event type */
+		_bufferWriter->writeLEB128(ThreadParkID);
+
+		/* write start time - this is when the sleep started not when it ended so we
+		 * need to subtract the duration since the event is emitted when the sleep ends.
+		 */
+		_bufferWriter->writeLEB128(entry->ticks - entry->duration);
+
+		/* write duration time which is always in ticks, in our case nanos */
+		_bufferWriter->writeLEB128(entry->duration);
+
+		/* write event thread index */
+		_bufferWriter->writeLEB128(entry->eventThreadIndex);
+
+		/* stacktrace index */
+		_bufferWriter->writeLEB128(entry->stackTraceIndex);
+
+		/* class index */
+		_bufferWriter->writeLEB128(entry->parkedClass);
+
+		/* timeout value which is always in millis */
+		_bufferWriter->writeLEB128(entry->timeOut/1000000);
+
+		/* until value which is always in millis */
+		_bufferWriter->writeLEB128(entry->untilTime/1000000);
+
+		/* address of monitor */
+		_bufferWriter->writeLEB128(entry->parkedAddress);
+
+		/* write size */
+		_bufferWriter->writeLEB128PaddedU32(dataStart, _bufferWriter->getCursor() - dataStart);
+	}
+
+	static void
 	writeCPULoadEvent(void *anElement, void *userData)
 	{
 		CPULoadEntry *entry = (CPULoadEntry *)anElement;
@@ -680,6 +730,8 @@ done:
 
 	static void writeThreadContextSwitchRateEvent(void *anElement, void *userData);
 
+	static void writeThreadStatisticsEvent(void *anElement, void *userData);
+
 	UDATA
 	calculateRequiredBufferSize()
 	{
@@ -722,6 +774,8 @@ done:
 
 		requiredBufferSize += (_constantPoolTypes.getMonitorWaitCount() * MONITOR_WAIT_EVENT_SIZE);
 
+		requiredBufferSize += (_constantPoolTypes.getThreadParkCount() * THREAD_PARK_EVENT_SIZE);
+
 		requiredBufferSize += JVM_INFORMATION_EVENT_SIZE;
 
 		requiredBufferSize += OS_INFORMATION_EVENT_SIZE;
@@ -743,6 +797,8 @@ done:
 		requiredBufferSize += _constantPoolTypes.getClassLoadingStatisticsCount() * CLASS_LOADING_STATISTICS_EVENT_SIZE;
 
 		requiredBufferSize += _constantPoolTypes.getThreadContextSwitchRateCount() * THREAD_CONTEXT_SWITCH_RATE_SIZE;
+
+		requiredBufferSize += (_constantPoolTypes.getThreadStatisticsCount() * THREAD_STATISTICS_EVENT_SIZE);
 
 		return requiredBufferSize;
 	}

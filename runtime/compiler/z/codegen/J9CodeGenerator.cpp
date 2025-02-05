@@ -162,6 +162,18 @@ J9::Z::CodeGenerator::initialize()
       cg->setSupportsInlineVectorizedMismatch();
       }
 
+   static bool disableCASInlining = feGetEnv("TR_DisableCASInlining") != NULL;
+   if (!disableCASInlining)
+      {
+      cg->setSupportsInlineUnsafeCompareAndSet();
+      }
+
+   static bool disableCAEInlining = feGetEnv("TR_DisableCAEInlining") != NULL;
+   if (!disableCAEInlining)
+      {
+      cg->setSupportsInlineUnsafeCompareAndExchange();
+      }
+
    // Let's turn this on.  There is more work needed in the opt
    // to catch the case where the BNDSCHK is inserted after
    //
@@ -3749,6 +3761,20 @@ J9::Z::CodeGenerator::suppressInliningOfRecognizedMethod(TR::RecognizedMethod me
       return true;
       }
 
+   static bool disableZNextCompressExpand = feGetEnv("TR_DisableZNextCompressExpand") != NULL;
+   if (!disableZNextCompressExpand &&
+       (self()->comp()->target().cpu.supportsFeature(OMR_FEATURE_S390_MISCELLANEOUS_INSTRUCTION_EXTENSION_4) ||
+        TR::InstOpCode(TR::InstOpCode::BEXTG).canEmulate() && TR::InstOpCode(TR::InstOpCode::BDEPG).canEmulate()))
+      {
+      if (method == TR::java_lang_Integer_compress ||
+          method == TR::java_lang_Integer_expand ||
+          method == TR::java_lang_Long_compress ||
+          method == TR::java_lang_Long_expand)
+         {
+         return true;
+         }
+      }
+
    if (method == TR::java_util_concurrent_atomic_AtomicBoolean_getAndSet ||
        method == TR::java_util_concurrent_atomic_AtomicInteger_getAndAdd ||
        method == TR::java_util_concurrent_atomic_AtomicInteger_getAndIncrement ||
@@ -3834,8 +3860,11 @@ J9::Z::CodeGenerator::inlineDirectCall(
       }
 
    static const char * enableTRTRE = feGetEnv("TR_enableTRTRE");
-   static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
    static const bool enableOSW = feGetEnv("TR_noPauseOnSpinWait") == NULL;
+
+   bool disableCASInlining = !cg->getSupportsInlineUnsafeCompareAndSet();
+   bool disableCAEInlining = !cg->getSupportsInlineUnsafeCompareAndExchange();
+
    switch (methodSymbol->getRecognizedMethod())
       {
       case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
@@ -3847,8 +3876,11 @@ J9::Z::CodeGenerator::inlineDirectCall(
 
          if ((!TR::Compiler->om.canGenerateArraylets() || node->isUnsafeGetPutCASCallOnNonArray()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CS, IS_NOT_OBJ);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CS, IS_NOT_OBJ);
+               return true;
+               }
             }
          break;
 
@@ -3860,8 +3892,11 @@ J9::Z::CodeGenerator::inlineDirectCall(
          // Too risky to do Long-31bit version now.
          if (comp->target().is64Bit() && (!TR::Compiler->om.canGenerateArraylets() || node->isUnsafeGetPutCASCallOnNonArray()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CSG, IS_NOT_OBJ);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CSG, IS_NOT_OBJ);
+               return true;
+               }
             }
          break;
 
@@ -3872,15 +3907,18 @@ J9::Z::CodeGenerator::inlineDirectCall(
 
          if ((!TR::Compiler->om.canGenerateArraylets() || node->isUnsafeGetPutCASCallOnNonArray()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, (comp->useCompressedPointers() ? TR::InstOpCode::CS : TR::InstOpCode::getCmpAndSwapOpCode()), IS_OBJ);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, (comp->useCompressedPointers() ? TR::InstOpCode::CS : TR::InstOpCode::getCmpAndSwapOpCode()), IS_OBJ);
+               return true;
+               }
             }
          break;
 
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
          if ((!TR::Compiler->om.canGenerateArraylets() || node->isUnsafeGetPutCASCallOnNonArray()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (!disableCAEIntrinsic)
+            if (!disableCAEInlining)
                {
                resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CS, IS_NOT_OBJ, true);
                return true;
@@ -3892,7 +3930,7 @@ J9::Z::CodeGenerator::inlineDirectCall(
          // Too risky to do Long-31bit version now.
          if (comp->target().is64Bit() && (!TR::Compiler->om.canGenerateArraylets() || node->isUnsafeGetPutCASCallOnNonArray()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (!disableCAEIntrinsic)
+            if (!disableCAEInlining)
                {
                resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, TR::InstOpCode::CSG, IS_NOT_OBJ, true);
                return true;
@@ -3912,7 +3950,7 @@ J9::Z::CodeGenerator::inlineDirectCall(
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
          if ((!TR::Compiler->om.canGenerateArraylets() || node->isUnsafeGetPutCASCallOnNonArray()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (!disableCAEIntrinsic)
+            if (!disableCAEInlining)
                {
                resultReg = TR::TreeEvaluator::VMinlineCompareAndSwap(node, cg, (comp->useCompressedPointers() ? TR::InstOpCode::CS : TR::InstOpCode::getCmpAndSwapOpCode()), IS_OBJ, true);
                return true;
@@ -4117,6 +4155,30 @@ J9::Z::CodeGenerator::inlineDirectCall(
          return true;
       default:
          break;
+      }
+
+   static bool disableZNextCompressExpand = feGetEnv("TR_DisableZNextCompressExpand") != NULL;
+   if (!disableZNextCompressExpand &&
+       (self()->comp()->target().cpu.supportsFeature(OMR_FEATURE_S390_MISCELLANEOUS_INSTRUCTION_EXTENSION_4) ||
+        TR::InstOpCode(TR::InstOpCode::BEXTG).canEmulate() && TR::InstOpCode(TR::InstOpCode::BDEPG).canEmulate()))
+      {
+      switch (methodSymbol->getRecognizedMethod())
+         {
+         case TR::java_lang_Integer_compress:
+            resultReg = TR::TreeEvaluator::inlineBitCompress(node, cg, false);
+            return true;
+         case TR::java_lang_Integer_expand:
+            resultReg = TR::TreeEvaluator::inlineBitExpand(node, cg, false);
+            return true;
+         case TR::java_lang_Long_compress:
+            resultReg = TR::TreeEvaluator::inlineBitCompress(node, cg, true);
+            return true;
+         case TR::java_lang_Long_expand:
+            resultReg = TR::TreeEvaluator::inlineBitExpand(node, cg, true);
+            return true;
+         default:
+            break;
+         }
       }
 
 #ifdef J9VM_OPT_JAVA_CRYPTO_ACCELERATION

@@ -744,10 +744,12 @@ static const char * const excludeArray[] = {
    "java/lang/reflect/AccessibleObject.invokeF(Ljava/lang/Object;[Ljava/lang/Object;)F",
    "java/lang/reflect/AccessibleObject.invokeD(Ljava/lang/Object;[Ljava/lang/Object;)D",
    "java/lang/reflect/AccessibleObject.invokeL(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;",
+#if JAVA_SPEC_VERSION < 24
    "java/security/AccessController.doPrivileged(Ljava/security/PrivilegedAction;Ljava/security/AccessControlContext;)Ljava/lang/Object;",
    "java/security/AccessController.doPrivileged(Ljava/security/PrivilegedExceptionAction;Ljava/security/AccessControlContext;)Ljava/lang/Object;",
    "java/security/AccessController.doPrivileged(Ljava/security/PrivilegedAction;Ljava/security/AccessControlContext;[Ljava/security/Permission;)Ljava/lang/Object;",
    "java/security/AccessController.doPrivileged(Ljava/security/PrivilegedExceptionAction;Ljava/security/AccessControlContext;[Ljava/security/Permission;)Ljava/lang/Object;",
+#endif /* JAVA_SPEC_VERSION < 24 */
    "java/lang/NullPointerException.fillInStackTrace()Ljava/lang/Throwable;",
 #if (17 <= JAVA_SPEC_VERSION) && (JAVA_SPEC_VERSION <= 18)
    "jdk/internal/loader/NativeLibraries.load(Ljdk/internal/loader/NativeLibraries$NativeLibraryImpl;Ljava/lang/String;ZZZ)Z",
@@ -2615,6 +2617,14 @@ void TR_ResolvedJ9Method::construct()
       {TR::unknownMethod}
    };
 
+   static X DataAccessExternalDecimalMethods[] =
+   {
+      {x(TR::com_ibm_dataaccess_ExternalDecimal_checkExternalDecimal , "checkExternalDecimal" , "([BIIII)I")},
+      {x(TR::com_ibm_dataaccess_ExternalDecimal_checkExternalDecimal_, "checkExternalDecimal_", "([BIIII)I")},
+
+      {TR::unknownMethod}
+   };
+
 
    static X BigDecimalMethods[] =
       {
@@ -2661,41 +2671,6 @@ void TR_ResolvedJ9Method::construct()
       {x(TR::java_math_BigInteger_stripLeadingZeroBytes2,          "stripLeadingZeroBytes", "(I[BII)[I")},
       {x(TR::java_math_BigInteger_bitCount,                        "bitCount",              "()I")},
       {x(TR::java_math_BigInteger_bitLength,                       "bitLength",             "()I")},
-      {    TR::unknownMethod}
-      };
-
-   static X PrefetchMethods[] =
-      {
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Load",              "(Ljava/lang/Object;I)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Load_L1",           "(Ljava/lang/Object;I)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Load_L2",           "(Ljava/lang/Object;I)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Load_L3",           "(Ljava/lang/Object;I)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Store",             "(Ljava/lang/Object;I)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_LoadNTA",           "(Ljava/lang/Object;I)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_StoreNTA",          "(Ljava/lang/Object;I)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_StoreConditional",  "(Ljava/lang/Object;I)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Release_StoreOnly",          "(Ljava/lang/Object;I)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Release_All",                "(Ljava/lang/Object;I)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Load",              "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Load_L1",           "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Load_L2",           "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Load_L3",           "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Store",             "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_LoadNTA",           "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_StoreNTA",          "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_StoreConditional",  "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Release_StoreOnly",          "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Release_All",                "(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Load",              "(Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Load_L1",           "(Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Load_L2",           "(Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Load_L3",           "(Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_Store",             "(Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_LoadNTA",           "(Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_StoreNTA",          "(Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Prefetch_StoreConditional",  "(Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Release_StoreOnly",          "(Ljava/lang/String;Ljava/lang/String;)V")},
-      {x(TR::com_ibm_Compiler_Internal__TR_Prefetch,     "_TR_Release_All",                "(Ljava/lang/String;Ljava/lang/String;)V")},
       {    TR::unknownMethod}
       };
 
@@ -3312,6 +3287,8 @@ void TR_ResolvedJ9Method::construct()
       {x(TR::java_lang_Integer_reverseBytes,            "reverseBytes",          "(I)I")},
       {x(TR::java_lang_Integer_rotateLeft,              "rotateLeft",            "(II)I")},
       {x(TR::java_lang_Integer_rotateRight,             "rotateRight",           "(II)I")},
+      {x(TR::java_lang_Integer_compress,                "compress",              "(II)I")},
+      {x(TR::java_lang_Integer_expand,                  "expand",                "(II)I")},
       {x(TR::java_lang_Integer_valueOf,                 "valueOf",               "(I)Ljava/lang/Integer;")},
       {  TR::java_lang_Integer_init,              6,    "<init>", (int16_t)-1,    "*"},
       {x(TR::java_lang_Integer_toUnsignedLong,          "toUnsignedLong",         "(I)J")},
@@ -3333,6 +3310,8 @@ void TR_ResolvedJ9Method::construct()
       {x(TR::java_lang_Long_reverseBytes,              "reverseBytes",           "(J)J")},
       {x(TR::java_lang_Long_rotateLeft,                 "rotateLeft",            "(JI)J")},
       {x(TR::java_lang_Long_rotateRight,                "rotateRight",           "(JI)J")},
+      {x(TR::java_lang_Long_compress,                   "compress",              "(JJ)J")},
+      {x(TR::java_lang_Long_expand,                     "expand",                "(JJ)J")},
       {  TR::java_lang_Long_init,                  6,    "<init>", (int16_t)-1,    "*"},
       {x(TR::java_lang_Long_stringSize,                 "stringSize",            "(J)I") },
       {x(TR::java_lang_Long_toString,                   "toString",            "(J)Ljava/lang/String;") },
@@ -3776,15 +3755,15 @@ void TR_ResolvedJ9Method::construct()
       {
       {x(TR::sun_nio_cs_ISO_8859_1_Encoder_encodeArrayLoop,       "encodeArrayLoop", "(Ljava/nio/CharBuffer;Ljava/nio/ByteBuffer;)Ljava/nio/charset/CoderResult;")},
       {x(TR::sun_nio_cs_ISO_8859_1_Encoder_encodeISOArray,        "encodeISOArray",         "([CI[BII)I")},
-      {x(TR::sun_nio_cs_ISO_8859_1_Decoder_decodeISO8859_1,       "decodeISO8859_1",      "([BII[CI)I")},
-      {x(TR::sun_nio_cs_US_ASCII_Encoder_encodeASCII,             "encodeASCII",             "([CII[BI)I")},
-      {x(TR::sun_nio_cs_US_ASCII_Decoder_decodeASCII,             "decodeASCII",             "([BII[CI)I")},
-      {x(TR::sun_nio_cs_ext_SBCS_Encoder_encodeSBCS,              "encodeSBCS",              "([CII[BI[B)I")},
-      {x(TR::sun_nio_cs_ext_SBCS_Decoder_decodeSBCS,              "decodeSBCS",           "([BII[CI[C)I")},
-      {x(TR::sun_nio_cs_UTF_8_Encoder_encodeUTF_8,                "encodeUTF_8",     "([CII[BI)I")},
-      {x(TR::sun_nio_cs_UTF_8_Decoder_decodeUTF_8,                "decodeUTF_8",          "([BII[CI)I")},
-      {x(TR::sun_nio_cs_UTF16_Encoder_encodeUTF16Big,             "encodeUTF16Big",       "([CII[BI)I")},
-      {x(TR::sun_nio_cs_UTF16_Encoder_encodeUTF16Little,          "encodeUTF16Little",    "([CII[BI)I")},
+      {x(TR::sun_nio_cs_ISO_8859_1_Decoder_decodeISO8859_1,       "decodeISO8859_1",      "([BII[CI)I")}, // Used in IBM SDK Java 8
+      {x(TR::sun_nio_cs_US_ASCII_Encoder_encodeASCII,             "encodeASCII",             "([CII[BI)I")}, // Used in Java 8 and 11
+      {x(TR::sun_nio_cs_US_ASCII_Decoder_decodeASCII,             "decodeASCII",             "([BII[CI)I")}, // Used in Java 8 and 11
+      {x(TR::sun_nio_cs_ext_SBCS_Encoder_encodeSBCS,              "encodeSBCS",              "([CII[BI[B)I")}, // Used in IBM SDK Java 8
+      {x(TR::sun_nio_cs_ext_SBCS_Decoder_decodeSBCS,              "decodeSBCS",           "([BII[CI[C)I")}, // Used in IBM SDK Java 8
+      {x(TR::sun_nio_cs_UTF_8_Encoder_encodeUTF_8,                "encodeUTF_8",     "([CII[BI)I")}, // Used in IBM SDK Java 8
+      {x(TR::sun_nio_cs_UTF_8_Decoder_decodeUTF_8,                "decodeUTF_8",          "([BII[CI)I")}, // Used in IBM SDK Java 8
+      {x(TR::sun_nio_cs_UTF16_Encoder_encodeUTF16Big,             "encodeUTF16Big",       "([CII[BI)I")}, // Used in IBM SDK Java 8
+      {x(TR::sun_nio_cs_UTF16_Encoder_encodeUTF16Little,          "encodeUTF16Little",    "([CII[BI)I")}, // Used in IBM SDK Java 8
       {  TR::unknownMethod}
       };
 
@@ -4283,8 +4262,8 @@ void TR_ResolvedJ9Method::construct()
    static Y class34[] =
       {
       { "java/util/Hashtable$HashEnumerator", HashtableHashEnumeratorMethods },
-      { "com/ibm/Compiler/Internal/Prefetch", PrefetchMethods },
       { "java/lang/invoke/VarHandleInternal", VarHandleMethods },
+      { "com/ibm/dataaccess/ExternalDecimal", DataAccessExternalDecimalMethods },
       { 0 }
       };
 
@@ -9818,4 +9797,257 @@ TR_ResolvedJ9Method::isFieldFlattened(TR::Compilation *comp, int32_t cpIndex, bo
    // No lock is required here. Entries in J9Class::flattenedClassCache are only written during classload.
    // They are effectively read only when being exposed to the JIT.
    return vmThread->javaVM->internalVMFunctions->isFlattenableFieldFlattened(reinterpret_cast<J9Class *>(containingClass), fieldShape);
+   }
+
+bool
+TR_ResolvedJ9Method::isDAAExternalDecimalWrapperMethod()
+   {
+   // DAA External Decimal check method
+   return (this->TR_ResolvedMethod::getRecognizedMethod() == TR::com_ibm_dataaccess_ExternalDecimal_checkExternalDecimal);
+   }
+
+bool
+TR_ResolvedJ9Method::isDAAWrapperMethod()
+   {
+   return isDAAMarshallingWrapperMethod() || isDAAPackedDecimalWrapperMethod() || isDAAExternalDecimalWrapperMethod();
+   }
+
+bool
+TR_ResolvedJ9Method::isDAAMarshallingWrapperMethod()
+   {
+   TR::RecognizedMethod rm = this->TR_ResolvedMethod::getRecognizedMethod();
+
+   if (rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeShort        ||
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeShortLength  ||
+
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeInt          ||
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeIntLength    ||
+
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeLong         ||
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeLongLength   ||
+
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeFloat        ||
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeDouble       ||
+
+       // ByteArray Unmarshalling methods
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readShort       ||
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readShortLength ||
+
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readInt         ||
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readIntLength   ||
+
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readLong        ||
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readLongLength  ||
+
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readFloat       ||
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readDouble)
+      {
+      return true;
+      }
+   return false;
+   }
+
+bool
+TR_ResolvedJ9Method::isDAAPackedDecimalWrapperMethod()
+   {
+   TR::RecognizedMethod rm = this->TR_ResolvedMethod::getRecognizedMethod();
+
+   if (// DAA Packed Decimal arithmetic methods
+       rm == TR::com_ibm_dataaccess_PackedDecimal_addPackedDecimal        ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_subtractPackedDecimal   ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_multiplyPackedDecimal   ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_dividePackedDecimal     ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_remainderPackedDecimal  ||
+
+       // DAA Packed Decimal comparison methods
+       rm == TR::com_ibm_dataaccess_PackedDecimal_lessThanPackedDecimal            ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_lessThanOrEqualsPackedDecimal    ||
+
+       rm == TR::com_ibm_dataaccess_PackedDecimal_greaterThanPackedDecimal         ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_greaterThanOrEqualsPackedDecimal ||
+
+       rm == TR::com_ibm_dataaccess_PackedDecimal_equalsPackedDecimal     ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_notEqualsPackedDecimal  ||
+
+       // DAA Packed Decimal shift methods
+       rm == TR::com_ibm_dataaccess_PackedDecimal_shiftLeftPackedDecimal  ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_shiftRightPackedDecimal ||
+
+       // DAA Packed Decimal check methods
+       rm == TR::com_ibm_dataaccess_PackedDecimal_checkPackedDecimal            ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_checkPackedDecimal_2bInlined1 ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_checkPackedDecimal_2bInlined2 ||
+
+       // DAA Packed Decimal move method
+       rm == TR::com_ibm_dataaccess_PackedDecimal_movePackedDecimal             ||
+
+       // DAA Packed Decimal <-> Integer
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToInteger   ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToInteger_ByteBuffer ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertIntegerToPackedDecimal   ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertIntegerToPackedDecimal_ByteBuffer ||
+
+       // DAA Packed Decimal <-> Long
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToLong      ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToLong_ByteBuffer      ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertLongToPackedDecimal      ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertLongToPackedDecimal_ByteBuffer      ||
+
+       // DAA External Decimal <-> Integer
+       rm == TR::com_ibm_dataaccess_DecimalData_convertExternalDecimalToInteger ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertIntegerToExternalDecimal ||
+
+       // DAA External Decimal <-> Long
+       rm == TR::com_ibm_dataaccess_DecimalData_convertExternalDecimalToLong    ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertLongToExternalDecimal    ||
+
+       // DAA Packed Decimal <-> External Decimal
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToExternalDecimal ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertExternalDecimalToPackedDecimal ||
+
+       // DAA Packed Decimal <-> Unicode Decimal
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToUnicodeDecimal  ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertUnicodeDecimalToPackedDecimal  ||
+
+       // DAA Packed Decimal <-> BigInteger
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToBigInteger   ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertBigIntegerToPackedDecimal   ||
+
+       // DAA Packed Decimal <-> BigDecimal
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToBigDecimal   ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertBigDecimalToPackedDecimal   ||
+
+       // DAA External Decimal <-> BigInteger
+       rm == TR::com_ibm_dataaccess_DecimalData_convertExternalDecimalToBigInteger ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertBigIntegerToExternalDecimal ||
+
+       // DAA External Decimal <-> BigDecimal
+       rm == TR::com_ibm_dataaccess_DecimalData_convertExternalDecimalToBigDecimal ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertBigDecimalToExternalDecimal ||
+
+       // DAA Unicode Decimal <-> Integer
+       rm == TR::com_ibm_dataaccess_DecimalData_convertUnicodeDecimalToInteger ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertIntegerToUnicodeDecimal ||
+
+       // DAA Unicode Decimal <-> Long
+       rm == TR::com_ibm_dataaccess_DecimalData_convertUnicodeDecimalToLong        ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertLongToUnicodeDecimal        ||
+
+       // DAA Unicode Decimal <-> BigInteger
+       rm == TR::com_ibm_dataaccess_DecimalData_convertUnicodeDecimalToBigInteger  ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertBigIntegerToUnicodeDecimal  ||
+
+       // DAA Unicode Decimal <-> BigDecimal
+       rm == TR::com_ibm_dataaccess_DecimalData_convertUnicodeDecimalToBigDecimal  ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertBigDecimalToUnicodeDecimal  ||
+
+
+       rm == TR::com_ibm_dataaccess_DecimalData_slowSignedPackedToBigDecimal ||
+       rm == TR::com_ibm_dataaccess_DecimalData_slowBigDecimalToSignedPacked)
+      {
+      return true;
+      }
+   return false;
+   }
+
+bool
+TR_ResolvedJ9Method::isDAAExternalDecimalIntrinsicMethod()
+   {
+   // DAA External Decimal check method
+   return (this->TR_ResolvedMethod::getRecognizedMethod() == TR::com_ibm_dataaccess_ExternalDecimal_checkExternalDecimal_);
+   }
+
+bool
+TR_ResolvedJ9Method::isDAAIntrinsicMethod()
+   {
+   return isDAAMarshallingIntrinsicMethod() || isDAAPackedDecimalIntrinsicMethod() || isDAAExternalDecimalIntrinsicMethod();
+   }
+
+bool
+TR_ResolvedJ9Method::isDAAMarshallingIntrinsicMethod()
+   {
+   TR::RecognizedMethod rm = this->TR_ResolvedMethod::getRecognizedMethod();
+
+   if (rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeShort_        ||
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeShortLength_  ||
+
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeInt_          ||
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeIntLength_    ||
+
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeLong_         ||
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeLongLength_   ||
+
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeFloat_        ||
+       rm == TR::com_ibm_dataaccess_ByteArrayMarshaller_writeDouble_       ||
+
+       // ByteArray Unmarshalling methods
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readShort_       ||
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readShortLength_ ||
+
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readInt_         ||
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readIntLength_   ||
+
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readLong_        ||
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readLongLength_  ||
+
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readFloat_       ||
+       rm == TR::com_ibm_dataaccess_ByteArrayUnmarshaller_readDouble_)
+      {
+      return true;
+      }
+   return false;
+   }
+
+bool
+TR_ResolvedJ9Method::isDAAPackedDecimalIntrinsicMethod()
+   {
+   TR::RecognizedMethod rm = this->TR_ResolvedMethod::getRecognizedMethod();
+
+   if (// DAA Packed Decimal arithmetic methods
+       rm == TR::com_ibm_dataaccess_PackedDecimal_addPackedDecimal_        ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_subtractPackedDecimal_   ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_multiplyPackedDecimal_   ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_dividePackedDecimal_     ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_remainderPackedDecimal_  ||
+
+       // DAA Packed Decimal comparison methods
+       rm == TR::com_ibm_dataaccess_PackedDecimal_lessThanPackedDecimal_            ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_lessThanOrEqualsPackedDecimal_    ||
+
+       rm == TR::com_ibm_dataaccess_PackedDecimal_greaterThanPackedDecimal_         ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_greaterThanOrEqualsPackedDecimal_ ||
+
+       rm == TR::com_ibm_dataaccess_PackedDecimal_equalsPackedDecimal_     ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_notEqualsPackedDecimal_  ||
+
+       // DAA Packed Decimal shift methods
+       rm == TR::com_ibm_dataaccess_PackedDecimal_shiftLeftPackedDecimal_  ||
+       rm == TR::com_ibm_dataaccess_PackedDecimal_shiftRightPackedDecimal_ ||
+
+       // DAA Packed Decimal check method
+       rm == TR::com_ibm_dataaccess_PackedDecimal_checkPackedDecimal_ ||
+
+       // DAA Packed Decimal <-> Integer
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToInteger_   ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToInteger_ByteBuffer_ ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertIntegerToPackedDecimal_   ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertIntegerToPackedDecimal_ByteBuffer_ ||
+
+       // DAA Packed Decimal <-> Long
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToLong_      ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToLong_ByteBuffer_      ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertLongToPackedDecimal_      ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertLongToPackedDecimal_ByteBuffer_      ||
+
+       // DAA Packed Decimal <-> External Decimal
+       rm == TR::com_ibm_dataaccess_DecimalData_convertExternalDecimalToPackedDecimal_ ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToExternalDecimal_ ||
+
+       // DAA Packed Decimal <-> Unicode Decimal
+       rm == TR::com_ibm_dataaccess_DecimalData_convertPackedDecimalToUnicodeDecimal_  ||
+       rm == TR::com_ibm_dataaccess_DecimalData_convertUnicodeDecimalToPackedDecimal_)
+      {
+      return true;
+      }
+   return false;
    }

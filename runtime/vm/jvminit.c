@@ -1179,6 +1179,9 @@ initializeJavaVM(void * osMainThread, J9JavaVM ** vmPtr, J9CreateJavaVMParams *c
 	vm->internalVMLabels = (J9InternalVMLabels*)-1001;
 	vm->cInterpreter = J9_BUILDER_SYMBOL(cInterpreter);
 	vm->threadDllHandle = createParams->threadDllHandle;
+#if defined(J9VM_OPT_JFR)
+	vm->loadedClassCount = 0;
+#endif /* defined(J9VM_OPT_JFR) */
 
 #if JAVA_SPEC_VERSION >= 19
 	/* tid 1 will be use by main thread, first usable tid starts at 2 */
@@ -1207,23 +1210,27 @@ initializeJavaVM(void * osMainThread, J9JavaVM ** vmPtr, J9CreateJavaVMParams *c
 	}
 #endif /* J9VM_OPT_JITSERVER */
 
-
 /*
  * Disable AVX+ vector register preservation on x86 due to a large performance regression.
  * Issue: #15716
  */
 #if defined(J9HAMMER) && (JAVA_SPEC_VERSION >= 17) && 0
-	J9ProcessorDesc desc;
-	j9sysinfo_get_processor_description(&desc);
+{
+	OMRPORT_ACCESS_FROM_J9PORT(PORTLIB);
+	OMRProcessorDesc desc;
+	omrsysinfo_get_processor_description(&desc);
 
-	if (j9sysinfo_processor_has_feature(&desc, J9PORT_X86_FEATURE_AVX512F) && j9sysinfo_processor_has_feature(&desc, J9PORT_X86_FEATURE_AVX512BW)) {
+	if (omrsysinfo_processor_has_feature(&desc, OMR_FEATURE_X86_AVX512F)
+	&&  omrsysinfo_processor_has_feature(&desc, OMR_FEATURE_X86_AVX512BW)
+	) {
 		vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_USE_VECTOR_REGISTERS;
 		vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_USE_EXTENDED_VECTOR_REGISTERS;
-	} else if (j9sysinfo_processor_has_feature(&desc, J9PORT_X86_FEATURE_AVX512F)) {
+	} else if (omrsysinfo_processor_has_feature(&desc, OMR_FEATURE_X86_AVX512F)) {
 		vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_USE_EXTENDED_VECTOR_REGISTERS;
-	} else if (j9sysinfo_processor_has_feature(&desc, J9PORT_X86_FEATURE_AVX)) {
+	} else if (omrsysinfo_processor_has_feature(&desc, OMR_FEATURE_X86_AVX)) {
 		vm->extendedRuntimeFlags |= J9_EXTENDED_RUNTIME_USE_VECTOR_REGISTERS;
 	}
+}
 #endif /* defined(J9HAMMER) && (JAVA_SPEC_VERSION >= 17) && 0 */
 
 	initArgs.j2seVersion = createParams->j2seVersion;
@@ -1797,7 +1804,7 @@ initializeModulesPath(J9JavaVM *vm)
 	}
 	memset(vm->modulesPathEntry, 0, sizeof(J9ClassPathEntry));
 	modulesPath = (U_8 *)(vm->modulesPathEntry + 1);
-	j9str_printf(PORTLIB, (char*)modulesPath, (U_32)modulesPathLen + 1, "%s" DIR_SEPARATOR_STR "lib" DIR_SEPARATOR_STR "modules", javaHomeValue);
+	j9str_printf((char *)modulesPath, (U_32)modulesPathLen + 1, "%s" DIR_SEPARATOR_STR "lib" DIR_SEPARATOR_STR "modules", javaHomeValue);
 
 	vm->modulesPathEntry->path = modulesPath;
 	vm->modulesPathEntry->pathLength = (U_32)modulesPathLen;
@@ -1806,7 +1813,7 @@ initializeModulesPath(J9JavaVM *vm)
 		vm->modulesPathEntry->type = CPE_TYPE_UNKNOWN;
 		/* If <JAVA_HOME>/lib/modules is not usable, try to use <JAVA_HOME>/modules dir */
 		modulesPathLen = javaHomeValueLen + LITERAL_STRLEN(DIR_SEPARATOR_STR) + LITERAL_STRLEN("modules");
-		j9str_printf(PORTLIB, (char*)modulesPath, (U_32)modulesPathLen + 1, "%s" DIR_SEPARATOR_STR "modules", javaHomeValue);
+		j9str_printf((char *)modulesPath, (U_32)modulesPathLen + 1, "%s" DIR_SEPARATOR_STR "modules", javaHomeValue);
 		vm->modulesPathEntry->pathLength = (U_32)modulesPathLen;
 		rc = initializeModulesPathEntry(vm, vm->modulesPathEntry);
 		if (CPE_TYPE_UNUSABLE == rc) {
@@ -3606,7 +3613,7 @@ modifyDllLoadTable(J9JavaVM * vm, J9Pool* loadTable, J9VMInitArgs* j9vm_args)
 					return JNI_ERR;
 				}
 			}
-			j9str_printf(PORTLIB, zlibDllDir, expectedZlibPathLength, "%s%s%s",
+			j9str_printf(zlibDllDir, expectedZlibPathLength, "%s%s%s",
 					vm->j9libvmDirectory, DIR_SEPARATOR_STR, J9_ZIP_DLL_NAME);
 			zlibFileHandle = j9sl_open_shared_library(zlibDllDir, &(entry->descriptor), openFlags);
 			if (0 != zlibFileHandle) {
@@ -3638,7 +3645,7 @@ modifyDllLoadTable(J9JavaVM * vm, J9Pool* loadTable, J9VMInitArgs* j9vm_args)
 					return JNI_ERR;
 				}
 			}
-			j9str_printf(PORTLIB, dllCheckPathPtr, expectedPathLength, "%s%s%s",
+			j9str_printf(dllCheckPathPtr, expectedPathLength, "%s%s%s",
 					jitdirectoryValue, DIR_SEPARATOR_STR, entry->dllName);
 
 			jitFileHandle = j9sl_open_shared_library(dllCheckPathPtr, &(entry->descriptor), openFlags);
@@ -7275,16 +7282,17 @@ protectedInitializeJavaVM(J9PortLibrary* portLibrary, void * userData)
 
 #if defined(J9X86) || defined(J9HAMMER)
 	{
-		J9ProcessorDesc desc;
-		j9sysinfo_get_processor_description(&desc);
+		OMRPORT_ACCESS_FROM_J9PORT(PORTLIB);
+		OMRProcessorDesc desc;
+		omrsysinfo_get_processor_description(&desc);
 		/* cache line size in bytes is the value of bits 8-15 * 8 */
 		vm->dCacheLineSize = ((desc.features[2] & 0xFF00) >> 8) * 8;
-		if (j9sysinfo_processor_has_feature(&desc, J9PORT_X86_FEATURE_CLWB)) {
-			vm->cpuCacheWritebackCapabilities = J9PORT_X86_FEATURE_CLWB;
-		} else if (j9sysinfo_processor_has_feature(&desc, J9PORT_X86_FEATURE_CLFLUSHOPT)) {
-			vm->cpuCacheWritebackCapabilities = J9PORT_X86_FEATURE_CLFLUSHOPT;
-		} else if (j9sysinfo_processor_has_feature(&desc, J9PORT_X86_FEATURE_CLFSH)) {
-			vm->cpuCacheWritebackCapabilities = J9PORT_X86_FEATURE_CLFSH;
+		if (omrsysinfo_processor_has_feature(&desc, OMR_FEATURE_X86_CLWB)) {
+			vm->cpuCacheWritebackCapabilities = OMR_FEATURE_X86_CLWB;
+		} else if (omrsysinfo_processor_has_feature(&desc, OMR_FEATURE_X86_CLFLUSHOPT)) {
+			vm->cpuCacheWritebackCapabilities = OMR_FEATURE_X86_CLFLUSHOPT;
+		} else if (omrsysinfo_processor_has_feature(&desc, OMR_FEATURE_X86_CLFSH)) {
+			vm->cpuCacheWritebackCapabilities = OMR_FEATURE_X86_CLFSH;
 		}
 	}
 #endif /* x86 */

@@ -26,6 +26,11 @@ import com.ibm.oti.vm.VM;
 public class VMAPITest {
 	public static void main(String[] args) throws Throwable {
 		final WorkLoad workLoad = new WorkLoad(200, 20000, 200);
+		int sleepDuration = 1000;
+
+		if (args.length > 1) {
+			sleepDuration = Integer.parseInt(args[0]);
+		}
 
 		if (VM.isJFRRecordingStarted()) {
 			System.out.println("Failed should not be recording.");
@@ -55,7 +60,7 @@ public class VMAPITest {
 				return;
 			}
 
-			Thread.sleep(1000);
+			Thread.sleep(sleepDuration);
 			VM.jfrDump();
 			VM.stopJFR();
 

@@ -361,7 +361,7 @@ j9gc_initialize_heap(J9JavaVM *vm, IDATA *memoryParameterTable, UDATA heapBytesR
 
 			char *buffer = (char *)j9mem_allocate_memory(formatLength, OMRMEM_CATEGORY_MM);
 			if (NULL != buffer) {
-				j9str_printf(PORTLIB, buffer, formatLength, format, size, qualifier);
+				j9str_printf(buffer, formatLength, format, size, qualifier);
 			}
 			vm->internalVMFunctions->setErrorJ9dll(PORTLIB, loadInfo, buffer, TRUE);
 			break;
@@ -383,7 +383,7 @@ j9gc_initialize_heap(J9JavaVM *vm, IDATA *memoryParameterTable, UDATA heapBytesR
 
 			char *buffer = (char *)j9mem_allocate_memory(formatLength, OMRMEM_CATEGORY_MM);
 			if (NULL != buffer) {
-				j9str_printf(PORTLIB, buffer, formatLength, format, size, qualifier);
+				j9str_printf(buffer, formatLength, format, size, qualifier);
 			}
 			vm->internalVMFunctions->setErrorJ9dll(PORTLIB, loadInfo, buffer, TRUE);
 			break;
@@ -409,7 +409,7 @@ j9gc_initialize_heap(J9JavaVM *vm, IDATA *memoryParameterTable, UDATA heapBytesR
 
 			char *buffer = (char *)j9mem_allocate_memory(formatLength, OMRMEM_CATEGORY_MM);
 			if (NULL != buffer) {
-				j9str_printf(PORTLIB, buffer, formatLength, format, heapSize, heapSizeQualifier, pageSize, pageSizeQualifier);
+				j9str_printf(buffer, formatLength, format, heapSize, heapSizeQualifier, pageSize, pageSizeQualifier);
 			}
 			vm->internalVMFunctions->setErrorJ9dll(PORTLIB, loadInfo, buffer, TRUE);
 			extensions->largePageFailedToSatisfy = true;
@@ -435,11 +435,11 @@ j9gc_initialize_heap(J9JavaVM *vm, IDATA *memoryParameterTable, UDATA heapBytesR
 			UDATA newSpaceSize = extensions->newSpaceSize;
 			const char* newQualifier = NULL;
 			qualifiedSize(&newSpaceSize, &newQualifier);
-			UDATA formatLength = j9str_printf(PORTLIB, NULL, 0, format, splitFailure, newSpaceSize, newQualifier, oldSpaceSize, oldQualifier);
+			UDATA formatLength = j9str_printf(NULL, 0, format, splitFailure, newSpaceSize, newQualifier, oldSpaceSize, oldQualifier);
 
 			char *buffer = (char *)j9mem_allocate_memory(formatLength, OMRMEM_CATEGORY_MM);
 			if (NULL != buffer) {
-				j9str_printf(PORTLIB, buffer, formatLength, format, splitFailure, newSpaceSize, newQualifier, oldSpaceSize, oldQualifier);
+				j9str_printf(buffer, formatLength, format, splitFailure, newSpaceSize, newQualifier, oldSpaceSize, oldQualifier);
 			}
 			vm->internalVMFunctions->setErrorJ9dll(PORTLIB, loadInfo, buffer, TRUE);
 		}
@@ -2972,7 +2972,7 @@ gcInitializeDefaults(J9JavaVM* vm)
 #if defined(J9VM_ENV_DATA64)
 	vm->isIndexableDualHeaderShapeEnabled = TRUE;
 	vm->isIndexableDataAddrPresent = FALSE;
-	vm->isVirtualLargeObjectHeapEnabled = FALSE;
+	vm->indexableObjectLayout = J9IndexableObjectLayout_NoDataAddr_NoArraylet;
 #endif /* defined(J9VM_ENV_DATA64) */
 
 	/* enable estimateFragmentation for all GCs as default for java, but not the estimated result would not affect concurrentgc kickoff by default */
@@ -3036,12 +3036,12 @@ gcInitializeDefaults(J9JavaVM* vm)
 		extensions->concurrentScavenger = true;
 
 		if (LOADED == (FIND_DLL_TABLE_ENTRY(J9_JIT_DLL_NAME)->loadFlags & LOADED)) {
-
-			/* Check for supported hardware */
-			J9ProcessorDesc  processorDesc;
-			j9sysinfo_get_processor_description(&processorDesc);
-			bool hwSupported = j9sysinfo_processor_has_feature(&processorDesc, J9PORT_S390_FEATURE_GUARDED_STORAGE) &&
-					j9sysinfo_processor_has_feature(&processorDesc, J9PORT_S390_FEATURE_SIDE_EFFECT_ACCESS);
+			/* Check for supported hardware. */
+			OMRPORT_ACCESS_FROM_J9PORT(PORTLIB);
+			OMRProcessorDesc processorDesc;
+			omrsysinfo_get_processor_description(&processorDesc);
+			bool hwSupported = omrsysinfo_processor_has_feature(&processorDesc, OMR_FEATURE_S390_GUARDED_STORAGE)
+							&& omrsysinfo_processor_has_feature(&processorDesc, OMR_FEATURE_S390_SIDE_EFFECT_ACCESS);
 
 			if (hwSupported) {
 				/*
@@ -3325,11 +3325,8 @@ initializeIndexableObjectHeaderSizes(J9JavaVM* vm)
 #else /* defined(J9VM_ENV_DATA64) */
 	setIndexableObjectHeaderSizeWithoutDataAddress(vm);
 #endif /* defined(J9VM_ENV_DATA64) */
-	if (MM_GCExtensions::getExtensions(vm)->isVirtualLargeObjectHeapEnabled) {
-		vm->unsafeIndexableHeaderSize = 0;
-	} else {
-		vm->unsafeIndexableHeaderSize = vm->contiguousIndexableHeaderSize;
-	}
+	/* set default unsafeIndexableHeaderSize */
+	vm->unsafeIndexableHeaderSize = vm->contiguousIndexableHeaderSize;
 }
 
 #if defined(J9VM_ENV_DATA64)
@@ -3356,7 +3353,6 @@ setIndexableObjectHeaderSizeWithoutDataAddress(J9JavaVM* vm)
 		vm->contiguousIndexableHeaderSize = sizeof(J9IndexableObjectContiguousFull);
 		vm->discontiguousIndexableHeaderSize = sizeof(J9IndexableObjectDiscontiguousFull);
 	}
-	vm->unsafeIndexableHeaderSize = vm->contiguousIndexableHeaderSize;
 }
 
 #if defined(OMR_GC_CONCURRENT_SCAVENGER)

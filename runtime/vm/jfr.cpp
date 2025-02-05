@@ -53,6 +53,7 @@ static void jfrThreadStarting(J9HookInterface **hook, UDATA eventNum, void *even
 static void jfrThreadEnd(J9HookInterface **hook, UDATA eventNum, void *eventData, void *userData);
 static void jfrVMInitialized(J9HookInterface **hook, UDATA eventNum, void *eventData, void *userData);
 static void jfrVMMonitorWaited(J9HookInterface **hook, UDATA eventNum, void *eventData, void *userData);
+static void jfrVMThreadParked(J9HookInterface **hook, UDATA eventNum, void *eventData, void *userData);
 static void jfrStartSamplingThread(J9JavaVM *vm);
 static void initializeEventFields(J9VMThread *currentThread, J9JFREvent *jfrEvent, UDATA eventType);
 static int J9THREAD_PROC jfrSamplingThreadProc(void *entryArg);
@@ -87,6 +88,9 @@ jfrEventSize(J9JFREvent *jfrEvent)
 	case J9JFR_EVENT_TYPE_OBJECT_WAIT:
 		size = sizeof(J9JFRMonitorWaited) + (((J9JFRMonitorWaited*)jfrEvent)->stackTraceSize * sizeof(UDATA));
 		break;
+	case J9JFR_EVENT_TYPE_THREAD_PARK:
+		size = sizeof(J9JFRThreadParked) + (((J9JFRThreadParked*)jfrEvent)->stackTraceSize * sizeof(UDATA));
+		break;
 	case J9JFR_EVENT_TYPE_CPU_LOAD:
 		size = sizeof(J9JFRCPULoad);
 		break;
@@ -98,6 +102,9 @@ jfrEventSize(J9JFREvent *jfrEvent)
 		break;
 	case J9JFR_EVENT_TYPE_THREAD_CONTEXT_SWITCH_RATE:
 		size = sizeof(J9JFRThreadContextSwitchRate);
+		break;
+	case J9JFR_EVENT_TYPE_THREAD_STATISTICS:
+		size = sizeof(J9JFRThreadStatistics);
 		break;
 	default:
 		Assert_VM_unreachable();
@@ -638,10 +645,41 @@ jfrVMMonitorWaited(J9HookInterface **hook, UDATA eventNum, void *eventData, void
 	}
 }
 
+/**
+ * Hook for VM thread parked. Called without VM access.
+ *
+ * @param hook[in] the VM hook interface
+ * @param eventNum[in] the event number
+ * @param eventData[in] the event data
+ * @param userData[in] the registered user data
+ */
+static void
+jfrVMThreadParked(J9HookInterface **hook, UDATA eventNum, void *eventData, void* userData)
+{
+	J9VMUnparkedEvent *event = (J9VMUnparkedEvent *)eventData;
+	J9VMThread *currentThread = event->currentThread;
+	PORT_ACCESS_FROM_VMC(currentThread);
+
+#if defined(DEBUG)
+	j9tty_printf(PORTLIB, "\n!!! thread park %p\n", currentThread);
+#endif /* defined(DEBUG) */
+
+	J9JFRThreadParked *jfrEvent = (J9JFRThreadParked*)reserveBufferWithStackTrace(currentThread, currentThread, J9JFR_EVENT_TYPE_THREAD_PARK, sizeof(*jfrEvent));
+	if (NULL != jfrEvent) {
+		// TODO: worry about overflow?
+		jfrEvent->time = (event->millis * 1000000) + event->nanos;
+		jfrEvent->duration = j9time_nano_time() - event->startTicks;
+		jfrEvent->parkedAddress = event->parkedAddress;
+		jfrEvent->parkedClass = event->parkedClass;
+	}
+}
+
+
 jint
 initializeJFR(J9JavaVM *vm, BOOLEAN lateInit)
 {
 	PORT_ACCESS_FROM_JAVAVM(vm);
+	OMRPORT_ACCESS_FROM_J9PORT(PORTLIB);
 	jint rc = JNI_ERR;
 	J9HookInterface **vmHooks = getVMHookInterface(vm);
 	U_8 *buffer = NULL;
@@ -690,6 +728,10 @@ initializeJFR(J9JavaVM *vm, BOOLEAN lateInit)
 		goto fail;
 	}
 
+	if ((*vmHooks)->J9HookRegisterWithCallSite(vmHooks, J9HOOK_VM_UNPARKED, jfrVMThreadParked, OMR_GET_CALLSITE(), NULL)) {
+		goto fail;
+	}
+
 	/* Allocate constantEvents. */
 	vm->jfrState.constantEvents = j9mem_allocate_memory(sizeof(JFRConstantEvents), J9MEM_CATEGORY_VM);
 	if (NULL == vm->jfrState.constantEvents) {
@@ -723,7 +765,14 @@ initializeJFR(J9JavaVM *vm, BOOLEAN lateInit)
 
 	vm->jfrState.prevSysCPUTime.timestamp = -1;
 	vm->jfrState.prevProcTimestamp = -1;
-	vm->jfrState.prevContextSwitchTimestamp = -1;
+
+	if (0 == omrsysinfo_get_number_context_switches(&vm->jfrState.prevContextSwitches)) {
+		vm->jfrState.prevContextSwitchTimestamp = j9time_nano_time();
+	} else {
+		vm->jfrState.prevContextSwitchTimestamp = -1;
+		vm->jfrState.prevContextSwitches = 0;
+	}
+
 	if (omrthread_monitor_init_with_name(&vm->jfrBufferMutex, 0, "JFR global buffer mutex")) {
 		goto fail;
 	}
@@ -813,6 +862,7 @@ tearDownJFR(J9JavaVM *vm)
 	/* Unregister it anyway even it wasn't registered for initializeJFR(vm, TRUE). */
 	(*vmHooks)->J9HookUnregister(vmHooks, J9HOOK_VM_INITIALIZED, jfrVMInitialized, NULL);
 	(*vmHooks)->J9HookUnregister(vmHooks, J9HOOK_VM_MONITOR_WAITED, jfrVMMonitorWaited, NULL);
+	(*vmHooks)->J9HookUnregister(vmHooks, J9HOOK_VM_UNPARKED, jfrVMThreadParked, NULL);
 
 	/* Free global data */
 	VM_JFRConstantPoolTypes::freeJFRConstantEvents(vm);
@@ -973,7 +1023,6 @@ void
 jfrClassLoadingStatistics(J9VMThread *currentThread)
 {
 	J9JavaVM *vm = currentThread->javaVM;
-	J9InternalVMFunctions *vmFuncs = vm->internalVMFunctions;
 	J9JFRClassLoadingStatistics *jfrEvent = (J9JFRClassLoadingStatistics *)reserveBuffer(currentThread, sizeof(J9JFRClassLoadingStatistics));
 
 	if (NULL != jfrEvent) {
@@ -983,20 +1032,7 @@ jfrClassLoadingStatistics(J9VMThread *currentThread)
 		UDATA unloadedAnonClassCount = 0;
 		vm->memoryManagerFunctions->j9gc_get_cumulative_class_unloading_stats(currentThread, &unloadedAnonClassCount, &unloadedClassCount, NULL);
 		jfrEvent->unloadedClassCount = (I_64)(unloadedClassCount + unloadedAnonClassCount);
-
-		internalReleaseVMAccess(currentThread);
-
-		J9ClassLoaderWalkState walkState = {0};
-		J9ClassLoader *classLoader = vmFuncs->allClassLoadersStartDo(&walkState, vm, 0);
-
-		while (NULL != classLoader) {
-			jfrEvent->loadedClassCount += classLoader->loadedClassCount;
-
-			classLoader= vmFuncs->allClassLoadersNextDo(&walkState);
-		}
-		vmFuncs->allClassLoadersEndDo(&walkState);
-
-		internalAcquireVMAccess(currentThread);
+		jfrEvent->loadedClassCount = vm->loadedClassCount;
 	}
 }
 
@@ -1017,16 +1053,35 @@ jfrThreadContextSwitchRate(J9VMThread *currentThread)
 
 			initializeEventFields(currentThread, (J9JFREvent *)jfrEvent, J9JFR_EVENT_TYPE_THREAD_CONTEXT_SWITCH_RATE);
 
-			if (-1 == jfrState->prevContextSwitchTimestamp) {
-				jfrEvent->switchRate = 0;
+			if ((-1 == jfrState->prevContextSwitchTimestamp)
+				|| (currentTime == jfrState->prevContextSwitchTimestamp)
+			) {
+				jfrEvent->switchRate = 0.0f;
 			} else {
 				int64_t timeDelta = currentTime - jfrState->prevContextSwitchTimestamp;
-				jfrEvent->switchRate = ((double)(switches - jfrState->prevContextSwitches) / timeDelta) * 1e9;
+				jfrEvent->switchRate = (switches - jfrState->prevContextSwitches) * 1e9f / timeDelta;
 			}
 			jfrState->prevContextSwitches = switches;
 			jfrState->prevContextSwitchTimestamp = currentTime;
 		}
 	}
+}
+
+void
+jfrThreadStatistics(J9VMThread *currentThread)
+{
+	J9JavaVM *vm = currentThread->javaVM;
+	J9JFRThreadStatistics *jfrEvent = (J9JFRThreadStatistics *)reserveBuffer(currentThread, sizeof(J9JFRThreadStatistics));
+
+	if (NULL != jfrEvent) {
+		initializeEventFields(currentThread, (J9JFREvent *)jfrEvent, J9JFR_EVENT_TYPE_THREAD_STATISTICS);
+
+		jfrEvent->activeThreadCount = vm->totalThreadCount;
+		jfrEvent->daemonThreadCount = vm->daemonThreadCount;
+		jfrEvent->accumulatedThreadCount = vm->accumulatedThreadCount;
+		jfrEvent->peakThreadCount = vm->peakThreadCount;
+	}
+
 }
 
 static int J9THREAD_PROC
@@ -1047,6 +1102,7 @@ jfrSamplingThreadProc(void *entryArg)
 				internalAcquireVMAccess(currentThread);
 				jfrCPULoad(currentThread);
 				jfrClassLoadingStatistics(currentThread);
+				jfrThreadStatistics(currentThread);
 				if (0 == (count % 1000)) { // 10 seconds
 					J9SignalAsyncEvent(vm, NULL, vm->jfrThreadCPULoadAsyncKey);
 					jfrThreadContextSwitchRate(currentThread);
@@ -1071,7 +1127,10 @@ jfrSamplingThreadProc(void *entryArg)
 jboolean
 setJFRRecordingFileName(J9JavaVM *vm, char *fileName)
 {
-	if ((char*)DEFAULT_JFR_FILE_NAME != vm->jfrState.jfrFileName) {
+	UDATA defaultFileNameLen = strlen(DEFAULT_JFR_FILE_NAME);
+	if ((defaultFileNameLen != strlen(vm->jfrState.jfrFileName))
+	|| (0 != strncmp(DEFAULT_JFR_FILE_NAME, vm->jfrState.jfrFileName, defaultFileNameLen))
+	) {
 		PORT_ACCESS_FROM_JAVAVM(vm);
 		j9mem_free_memory(vm->jfrState.jfrFileName);
 	}

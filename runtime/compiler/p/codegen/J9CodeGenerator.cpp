@@ -98,7 +98,7 @@ J9::Power::CodeGenerator::initialize()
 
    if (comp->target().cpu.isAtLeast(OMR_PROCESSOR_PPC_P8) && comp->target().cpu.supportsFeature(OMR_FEATURE_PPC_HAS_VSX) &&
       comp->target().is64Bit() && !comp->getOption(TR_DisableFastStringIndexOf) &&
-      !TR::Compiler->om.canGenerateArraylets() && !TR::Compiler->om.isOffHeapAllocationEnabled())
+      !TR::Compiler->om.canGenerateArraylets())
       cg->setSupportsInlineStringIndexOf();
 
    static bool disableStringInflateIntrinsic = feGetEnv("TR_DisableStringInflateIntrinsic") != NULL;
@@ -107,6 +107,18 @@ J9::Power::CodeGenerator::initialize()
       !TR::Compiler->om.canGenerateArraylets() &&
       !disableStringInflateIntrinsic)
       cg->setSupportsInlineStringLatin1Inflate();
+
+   static bool disableCASInlining = feGetEnv("TR_DisableCASInlining") != NULL;
+   if (!disableCASInlining)
+      {
+      cg->setSupportsInlineUnsafeCompareAndSet();
+      }
+
+   static bool disableCAEInlining = feGetEnv("TR_DisableCAEInlining") != NULL;
+   if (!disableCAEInlining)
+      {
+      cg->setSupportsInlineUnsafeCompareAndExchange();
+      }
 
    if (!comp->getOption(TR_DisableReadMonitors))
       cg->setSupportsReadOnlyLocks();

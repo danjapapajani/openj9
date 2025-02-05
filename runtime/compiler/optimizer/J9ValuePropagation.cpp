@@ -1768,6 +1768,10 @@ J9::ValuePropagation::constrainRecognizedMethod(TR::Node *node)
          }
       case TR::java_lang_Class_getComponentType:
          {
+         // Constrain the call in the last run of vp to avoid adding the transformation twice if the call is inside a loop.
+         if (!lastTimeThrough())
+            return;
+
          TR::Node *classChild = node->getLastChild();
          bool classChildGlobal;
          TR::VPConstraint *classChildConstraint = getConstraint(classChild, classChildGlobal);
@@ -2078,6 +2082,13 @@ J9::ValuePropagation::constrainRecognizedMethod(TR::Node *node)
          {
          case TR::java_lang_invoke_MethodHandle_asType:
             {
+#if defined(J9VM_OPT_JITSERVER)
+            // The J9VMJAVALANG macros used later
+            // will access vm information which is not available on the JITServer,
+            // bypass in this case to prevent an invalid class pointer being retrieved
+            if (comp()->isOutOfProcessCompilation())
+               break;
+#endif // J9VM_OPT_JITSERVER
             TR::Node* mh = node->getArgument(0);
             TR::Node* mt = node->getArgument(1);
             bool mhConstraintGlobal, mtConstraintGlobal;
@@ -2129,11 +2140,13 @@ J9::ValuePropagation::constrainRecognizedMethod(TR::Node *node)
 #if defined(J9VM_OPT_METHOD_HANDLE)
          case TR::java_lang_invoke_PrimitiveHandle_initializeClassIfRequired:
             {
+#if defined(J9VM_OPT_JITSERVER)
             // The macro J9VMJAVALANGINVOKEPRIMITIVEHANDLE used later
             // will access vm information which is not available on the JITServer,
             // bypass in this case to prevent an invalid class pointer being retrieved
             if (comp()->isOutOfProcessCompilation())
                break;
+#endif // J9VM_OPT_JITSERVER
             TR::Node* mh = node->getArgument(0);
             bool mhConstraintGlobal;
             TR::VPConstraint* mhConstraint = getConstraint(mh, mhConstraintGlobal);

@@ -43,7 +43,7 @@ J9_DECLARE_CONSTANT_UTF8(nullString, "(nullString)");
 J9_DECLARE_CONSTANT_UTF8(unknownClass, "(defaultPackage)/(unknownClass)");
 J9_DECLARE_CONSTANT_UTF8(nativeMethod, "(nativeMethod)");
 J9_DECLARE_CONSTANT_UTF8(nativeMethodSignature, "()");
-J9_DECLARE_CONSTANT_UTF8(defaultPackage, "(defaultPackage)");
+J9_DECLARE_CONSTANT_UTF8(defaultPackage, "");
 J9_DECLARE_CONSTANT_UTF8(bootLoaderName, "boostrapClassLoader");
 J9_DECLARE_CONSTANT_UTF8(unknownThread, "unknown thread");
 
@@ -204,6 +204,18 @@ struct MonitorWaitEntry {
 	BOOLEAN timedOut;
 };
 
+struct ThreadParkEntry {
+	I_64 ticks;
+	I_64 duration;
+	U_32 threadIndex;
+	U_32 eventThreadIndex;
+	U_32 stackTraceIndex;
+	U_32 parkedClass;
+	I_64 timeOut;
+	I_64 untilTime;
+	U_64 parkedAddress;
+};
+
 struct StackTraceEntry {
 	J9VMThread *vmThread;
 	I_64 ticks;
@@ -237,6 +249,14 @@ struct ClassLoadingStatisticsEntry {
 struct ThreadContextSwitchRateEntry {
 	I_64 ticks;
 	float switchRate;
+};
+
+struct ThreadStatisticsEntry {
+	I_64 ticks;
+	U_32 activeThreadCount;
+	U_32 daemonThreadCount;
+	U_32 accumulatedThreadCount;
+	U_32 peakThreadCount;
 };
 
 struct JVMInformationEntry {
@@ -316,6 +336,8 @@ private:
 	UDATA _threadSleepCount;
 	J9Pool *_monitorWaitTable;
 	UDATA _monitorWaitCount;
+	J9Pool *_threadParkTable;
+	UDATA _threadParkCount;
 	J9Pool *_cpuLoadTable;
 	UDATA _cpuLoadCount;
 	J9Pool *_threadCPULoadTable;
@@ -324,6 +346,8 @@ private:
 	UDATA _classLoadingStatisticsCount;
 	J9Pool *_threadContextSwitchRateTable;
 	U_32 _threadContextSwitchRateCount;
+	J9Pool *_threadStatisticsTable;
+	UDATA _threadStatisticsCount;
 
 	/* Processing buffers */
 	StackFrame *_currentStackFrameBuffer;
@@ -496,7 +520,7 @@ private:
 			goto skipFrame;
 		} else {
 			frame->methodIndex = cp->getMethodEntry(romMethod, ramClass);
-			frame->frameType = Interpreted; /* TODO need a way to know if its JIT'ed and inlined */
+			frame->frameType = (FrameType) frameType;
 		}
 
 		if ((UDATA)-1 == bytecodeOffset) {
@@ -587,6 +611,8 @@ public:
 
 	U_32 addMonitorWaitEntry(J9JFRMonitorWaited* threadWaitData);
 
+	void addThreadParkEntry(J9JFRThreadParked* threadParkData);
+
 	U_32 addCPULoadEntry(J9JFRCPULoad *cpuLoadData);
 
 	U_32 addThreadCPULoadEntry(J9JFRThreadCPULoad *threadCPULoadData);
@@ -594,6 +620,8 @@ public:
 	U_32 addClassLoadingStatisticsEntry(J9JFRClassLoadingStatistics *classLoadingStatisticsData);
 
 	void addThreadContextSwitchRateEntry(J9JFRThreadContextSwitchRate *threadContextSwitchRateData);
+
+	void addThreadStatisticsEntry(J9JFRThreadStatistics *threadStatisticsData);
 
 	J9Pool *getExecutionSampleTable()
 	{
@@ -620,6 +648,11 @@ public:
 		return _monitorWaitTable;
 	}
 
+	J9Pool *getThreadParkTable()
+	{
+		return _threadParkTable;
+	}
+
 	J9Pool *getCPULoadTable()
 	{
 		return _cpuLoadTable;
@@ -638,6 +671,11 @@ public:
 	J9Pool *getThreadContextSwitchRateTable()
 	{
 		return _threadContextSwitchRateTable;
+	}
+
+	J9Pool *getThreadStatisticsTable()
+	{
+		return _threadStatisticsTable;
 	}
 
 	UDATA getExecutionSampleCount()
@@ -665,6 +703,11 @@ public:
 		return _monitorWaitCount;
 	}
 
+	UDATA getThreadParkCount()
+	{
+		return _threadParkCount;
+	}
+
 	UDATA getCPULoadCount()
 	{
 		return _cpuLoadCount;
@@ -683,6 +726,11 @@ public:
 	U_32 getThreadContextSwitchRateCount()
 	{
 		return _threadContextSwitchRateCount;
+	}
+
+	UDATA getThreadStatisticsCount()
+	{
+		return _threadStatisticsCount;
 	}
 
 	ClassloaderEntry *getClassloaderEntry()
@@ -828,6 +876,9 @@ public:
 			case J9JFR_EVENT_TYPE_OBJECT_WAIT:
 				addMonitorWaitEntry((J9JFRMonitorWaited*) event);
 				break;
+			case J9JFR_EVENT_TYPE_THREAD_PARK:
+				addThreadParkEntry((J9JFRThreadParked*) event);
+				break;
 			case J9JFR_EVENT_TYPE_CPU_LOAD:
 				addCPULoadEntry((J9JFRCPULoad *)event);
 				break;
@@ -839,6 +890,9 @@ public:
 				break;
 			case J9JFR_EVENT_TYPE_THREAD_CONTEXT_SWITCH_RATE:
 				addThreadContextSwitchRateEntry((J9JFRThreadContextSwitchRate *)event);
+				break;
+			case J9JFR_EVENT_TYPE_THREAD_STATISTICS:
+				addThreadStatisticsEntry((J9JFRThreadStatistics *)event);
 				break;
 			default:
 				Assert_VM_unreachable();
@@ -1162,6 +1216,8 @@ done:
 		, _threadSleepCount(0)
 		, _monitorWaitTable(NULL)
 		, _monitorWaitCount(0)
+		, _threadParkTable(NULL)
+		, _threadParkCount(0)
 		, _cpuLoadTable(NULL)
 		, _cpuLoadCount(0)
 		, _threadCPULoadTable(NULL)
@@ -1170,6 +1226,8 @@ done:
 		, _classLoadingStatisticsCount(0)
 		, _threadContextSwitchRateTable(NULL)
 		, _threadContextSwitchRateCount(0)
+		, _threadStatisticsTable(NULL)
+		, _threadStatisticsCount(0)
 		, _previousStackTraceEntry(NULL)
 		, _firstStackTraceEntry(NULL)
 		, _previousThreadEntry(NULL)
@@ -1272,6 +1330,12 @@ done:
 			goto done;
 		}
 
+		_threadParkTable = pool_new(sizeof(ThreadParkEntry), 0, sizeof(U_64), 0, J9_GET_CALLSITE(), OMRMEM_CATEGORY_VM, POOL_FOR_PORT(privatePortLibrary));
+		if (NULL == _threadParkTable) {
+			_buildResult = OutOfMemory;
+			goto done;
+		}
+
 		_cpuLoadTable = pool_new(sizeof(CPULoadEntry), 0, sizeof(U_64), 0, J9_GET_CALLSITE(), OMRMEM_CATEGORY_VM, POOL_FOR_PORT(privatePortLibrary));
 		if (NULL == _cpuLoadTable) {
 			_buildResult = OutOfMemory;
@@ -1292,6 +1356,12 @@ done:
 
 		_threadContextSwitchRateTable = pool_new(sizeof(ThreadContextSwitchRateEntry), 0, sizeof(U_64), 0, J9_GET_CALLSITE(), OMRMEM_CATEGORY_VM, POOL_FOR_PORT(privatePortLibrary));
 		if (NULL == _threadContextSwitchRateTable ) {
+			_buildResult = OutOfMemory;
+			goto done;
+		}
+
+		_threadStatisticsTable = pool_new(sizeof(ThreadStatisticsEntry), 0, sizeof(U_64), 0, J9_GET_CALLSITE(), OMRMEM_CATEGORY_VM, POOL_FOR_PORT(privatePortLibrary));
+		if (NULL == _threadStatisticsTable ) {
 			_buildResult = OutOfMemory;
 			goto done;
 		}
@@ -1382,10 +1452,12 @@ done:
 		pool_kill(_threadEndTable);
 		pool_kill(_threadSleepTable);
 		pool_kill(_monitorWaitTable);
+		pool_kill(_threadParkTable);
 		pool_kill(_cpuLoadTable);
 		pool_kill(_threadCPULoadTable);
 		pool_kill(_classLoadingStatisticsTable);
 		pool_kill(_threadContextSwitchRateTable);
+		pool_kill(_threadStatisticsTable);
 		j9mem_free_memory(_globalStringTable);
 	}
 

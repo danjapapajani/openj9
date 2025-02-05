@@ -22,8 +22,10 @@
  */
 package java.lang.management;
 
+/*[IF JAVA_SPEC_VERSION < 24]*/
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+/*[ENDIF] JAVA_SPEC_VERSION < 24 */
 import java.util.List;
 import java.util.Map;
 
@@ -67,9 +69,11 @@ public interface RuntimeMXBean extends PlatformManagedObject {
 	 *         system.
 	 * @throws UnsupportedOperationException
 	 *             if the virtual machine does not support boot class loading.
+	/*[IF JAVA_SPEC_VERSION < 24]
 	 * @throws SecurityException
 	 *             if there is a security manager in effect and the caller does
 	 *             not have {@link ManagementPermission} of &quot;monitor&quot;.
+	/*[ENDIF] JAVA_SPEC_VERSION < 24
 	 */
 	public String getBootClassPath();
 
@@ -82,9 +86,11 @@ public interface RuntimeMXBean extends PlatformManagedObject {
 	 * @return the system classpath with each entry separated by the path
 	 *         separator character corresponding to the underlying operating
 	 *         system.
+	/*[IF JAVA_SPEC_VERSION < 24]
 	 * @throws SecurityException
 	 *             if there is a security manager in operation and the caller
 	 *             does not have permission to check system properties.
+	/*[ENDIF] JAVA_SPEC_VERSION < 24
 	 * @see System#getProperty(java.lang.String)
 	 */
 	public String getClassPath();
@@ -110,9 +116,11 @@ public interface RuntimeMXBean extends PlatformManagedObject {
 	 * @return the Java library path with each entry separated by the path
 	 *         separator character corresponding to the underlying operating
 	 *         system.
+	/*[IF JAVA_SPEC_VERSION < 24]
 	 * @throws SecurityException
 	 *             if there is a security manager in operation and the caller
 	 *             does not have permission to check system properties.
+	/*[ENDIF] JAVA_SPEC_VERSION < 24
 	 * @see System#getProperty(java.lang.String)
 	 */
 	public String getLibraryPath();
@@ -144,11 +152,16 @@ public interface RuntimeMXBean extends PlatformManagedObject {
 	 */
 	@SuppressWarnings("boxing")
 	default long getPid() {
+		/*[IF JAVA_SPEC_VERSION >= 24]*/
+		return ProcessHandle.current().pid();
+		/*[ELSE] JAVA_SPEC_VERSION >= 24 */
 		return AccessController.doPrivileged(new PrivilegedAction<Long>() {
+			@Override
 			public Long run() {
 				return ProcessHandle.current().pid();
 			}
 		});
+		/*[ENDIF] JAVA_SPEC_VERSION >= 24 */
 	}
 	/*[ENDIF] JAVA_SPEC_VERSION >= 10 */
 
@@ -159,9 +172,11 @@ public interface RuntimeMXBean extends PlatformManagedObject {
 	 * supplying the value &quot;java.vm.specification.name&quot; for the key.
 	 *
 	 * @return the name of the Java virtual machine specification.
+	/*[IF JAVA_SPEC_VERSION < 24]
 	 * @throws SecurityException
 	 *             if there is a security manager in operation and the caller
 	 *             does not have permission to check system properties.
+	/*[ENDIF] JAVA_SPEC_VERSION < 24
 	 * @see System#getProperty(java.lang.String)
 	 */
 	public String getSpecName();
@@ -173,9 +188,11 @@ public interface RuntimeMXBean extends PlatformManagedObject {
 	 * &quot;java.vm.specification.vendor&quot; for the key.
 	 *
 	 * @return the name of the Java virtual machine specification vendor.
+	/*[IF JAVA_SPEC_VERSION < 24]
 	 * @throws SecurityException
 	 *             if there is a security manager in operation and the caller
 	 *             does not have permission to check system properties.
+	/*[ENDIF] JAVA_SPEC_VERSION < 24
 	 * @see System#getProperty(java.lang.String)
 	 */
 	public String getSpecVendor();
@@ -187,9 +204,11 @@ public interface RuntimeMXBean extends PlatformManagedObject {
 	 * &quot;java.vm.specification.version&quot; for the key.
 	 *
 	 * @return the Java virtual machine specification version.
+	/*[IF JAVA_SPEC_VERSION < 24]
 	 * @throws SecurityException
 	 *             if there is a security manager in operation and the caller
 	 *             does not have permission to check system properties.
+	/*[ENDIF] JAVA_SPEC_VERSION < 24
 	 * @see System#getProperty(java.lang.String)
 	 */
 	public String getSpecVersion();
@@ -206,9 +225,11 @@ public interface RuntimeMXBean extends PlatformManagedObject {
 	 * the virtual machine.
 	 *
 	 * @return a map containing the names and values of every system property.
+	/*[IF JAVA_SPEC_VERSION < 24]
 	 * @throws SecurityException
 	 *             if there is a security manager in operation and the caller
 	 *             does not have permission to check system properties.
+	/*[ENDIF] JAVA_SPEC_VERSION < 24
 	 */
 	public Map<String, String> getSystemProperties();
 
@@ -226,9 +247,11 @@ public interface RuntimeMXBean extends PlatformManagedObject {
 	 * &quot;java.vm.name&quot; for the key.
 	 *
 	 * @return the name of the Java virtual machine implementation.
+	/*[IF JAVA_SPEC_VERSION < 24]
 	 * @throws SecurityException
 	 *             if there is a security manager in operation and the caller
 	 *             does not have permission to check system properties.
+	/*[ENDIF] JAVA_SPEC_VERSION < 24
 	 * @see System#getProperty(java.lang.String)
 	 */
 	public String getVmName();
@@ -240,9 +263,11 @@ public interface RuntimeMXBean extends PlatformManagedObject {
 	 * &quot;java.vm.vendor&quot; for the key.
 	 *
 	 * @return the name of the Java virtual machine implementation vendor.
+	/*[IF JAVA_SPEC_VERSION < 24]
 	 * @throws SecurityException
 	 *             if there is a security manager in operation and the caller
 	 *             does not have permission to check system properties.
+	/*[ENDIF] JAVA_SPEC_VERSION < 24
 	 * @see System#getProperty(java.lang.String)
 	 */
 	public String getVmVendor();
@@ -254,9 +279,11 @@ public interface RuntimeMXBean extends PlatformManagedObject {
 	 * &quot;java.vm.version&quot; for the key.
 	 *
 	 * @return the version of the Java virtual machine implementation.
+	/*[IF JAVA_SPEC_VERSION < 24]
 	 * @throws SecurityException
 	 *             if there is a security manager in operation and the caller
 	 *             does not have permission to check system properties.
+	/*[ENDIF] JAVA_SPEC_VERSION < 24
 	 * @see System#getProperty(java.lang.String)
 	 */
 	public String getVmVersion();

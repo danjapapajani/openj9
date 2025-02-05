@@ -159,7 +159,6 @@ jvm_add_exports(jvm
 	_JVM_HoldsLock@12
 	_JVM_InitProperties@8
 	_JVM_ArrayCopy@28
-	_JVM_DoPrivileged@20
 	_JVM_IHashCode@8
 	_JVM_Clone@8
 	_JVM_CompileClass@12
@@ -278,6 +277,12 @@ jvm_add_exports(jvm
 	_JVM_CopySwapMemory@44
 	JVM_BeforeHalt
 )
+
+if((JAVA_SPEC_VERSION LESS 9) AND OMR_OS_WINDOWS)
+	jvm_add_exports(jvm
+		_JVM_DoPrivileged@20
+	)
+endif()
 
 if(JAVA_SPEC_VERSION LESS 11)
 	jvm_add_exports(jvm
@@ -406,14 +411,6 @@ if(NOT JAVA_SPEC_VERSION LESS 19)
 		JVM_LoadZipLibrary
 		JVM_RegisterContinuationMethods
 	)
-	if(JAVA_SPEC_VERSION LESS 21)
-		jvm_add_exports(jvm
-			JVM_VirtualThreadMountBegin
-			JVM_VirtualThreadMountEnd
-			JVM_VirtualThreadUnmountBegin
-			JVM_VirtualThreadUnmountEnd
-		)
-	endif()
 endif()
 
 if(JAVA_SPEC_VERSION LESS 20)
@@ -484,10 +481,13 @@ endif()
 
 if(J9VM_OPT_VALHALLA_VALUE_TYPES)
 	jvm_add_exports(jvm
-		JVM_IsValhallaEnabled
+		JVM_IsFlatArray
 		JVM_IsImplicitlyConstructibleClass
 		JVM_IsNullRestrictedArray
+		JVM_IsValhallaEnabled
+		JVM_NewNullableAtomicArray
 		JVM_NewNullRestrictedArray
+		JVM_NewNullRestrictedAtomicArray
 		JVM_VirtualThreadHideFrames
 	)
 endif()

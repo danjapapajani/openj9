@@ -1499,7 +1499,6 @@ static TR::Register * generateMultianewArrayWithInlineAllocators(TR::Node *node,
    TR::LabelSymbol *nonZeroFirstDimLabel = generateLabelSymbol(cg);
 #if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
    bool isOffHeapAllocationEnabled = TR::Compiler->om.isOffHeapAllocationEnabled();
-   TR::LabelSymbol *populateFirstDimDataAddrSlot = isOffHeapAllocationEnabled? generateLabelSymbol(cg) : NULL;
 #endif /* defined(J9VM_GC_SPARSE_HEAP_ALLOCATION) */
 
    startLabel->setStartInternalControlFlow();
@@ -1558,33 +1557,11 @@ static TR::Register * generateMultianewArrayWithInlineAllocators(TR::Node *node,
 #if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
    if (isOffHeapAllocationEnabled)
       {
-      // Load dataAddr slot offset difference since 0 size arrays are treated as discontiguous.
-      TR_ASSERT_FATAL_WITH_NODE(node,
-         IS_32BIT_SIGNED(fej9->getOffsetOfDiscontiguousDataAddrField() - fej9->getOffsetOfContiguousDataAddrField()),
-         "dataAddrFieldOffset is too big for the instruction.");
-
-      TR_ASSERT_FATAL_WITH_NODE(node,
-         (TR::Compiler->om.compressObjectReferences()
-               && (fej9->getOffsetOfDiscontiguousDataAddrField() - fej9->getOffsetOfContiguousDataAddrField()) == 8)
-            || (!TR::Compiler->om.compressObjectReferences()
-               && fej9->getOffsetOfDiscontiguousDataAddrField() == fej9->getOffsetOfContiguousDataAddrField()),
-         "Offset of dataAddr field in discontiguous array is expected to be 8 bytes more than contiguous array if using compressed refs, "
-         "or same if using full refs. But was %d bytes for discontiguous and %d bytes for contiguous array.\n",
-         fej9->getOffsetOfDiscontiguousDataAddrField(), fej9->getOffsetOfContiguousDataAddrField());
-
-      generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4,
-         node,
-         temp3Reg,
-         static_cast<int32_t>(fej9->getOffsetOfDiscontiguousDataAddrField() - fej9->getOffsetOfContiguousDataAddrField()),
-         cg);
-
-      generateLabelInstruction(TR::InstOpCode::JMP4, node, populateFirstDimDataAddrSlot, cg);
+      // Init 1st dim dataAddr slot to 0
+      generateMemImmInstruction(TR::InstOpCode::S8MemImm4, node, generateX86MemoryReference(targetReg, fej9->getOffsetOfDiscontiguousDataAddrField(), cg), 0, cg);
       }
-   else
 #endif /* J9VM_GC_SPARSE_HEAP_ALLOCATION */
-      {
-      generateLabelInstruction(TR::InstOpCode::JMP4, node, doneLabel, cg);
-      }
+   generateLabelInstruction(TR::InstOpCode::JMP4, node, doneLabel, cg);
 
    //First dim length not 0
    generateLabelInstruction(TR::InstOpCode::label, node, nonZeroFirstDimLabel, cg);
@@ -1633,6 +1610,24 @@ static TR::Register * generateMultianewArrayWithInlineAllocators(TR::Node *node,
    generateMemRegInstruction(TR::InstOpCode::SMemReg(use64BitClasses), node, generateX86MemoryReference(targetReg, TR::Compiler->om.offsetOfObjectVftField(), cg), classReg, cg);
    // Init 1st dim array size field
    generateMemRegInstruction(TR::InstOpCode::S4MemReg, node, generateX86MemoryReference(targetReg, fej9->getOffsetOfContiguousArraySizeField(), cg), firstDimLenReg, cg);
+#if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
+   if (isOffHeapAllocationEnabled)
+      {
+      /* Populate dataAddr slot of 1st dimension array. Arrays of non-zero size
+       * use contiguous header layout while zero size arrays use discontiguous header layout.
+       */
+      generateRegMemInstruction(TR::InstOpCode::LEARegMem(),
+         node,
+         temp3Reg,
+         generateX86MemoryReference(targetReg, TR::Compiler->om.contiguousArrayHeaderSizeInBytes(), cg),
+         cg);
+      generateMemRegInstruction(TR::InstOpCode::SMemReg(),
+         node,
+         generateX86MemoryReference(targetReg, fej9->getOffsetOfContiguousDataAddrField(), cg),
+         temp3Reg,
+         cg);
+      }
+#endif /* J9VM_GC_SPARSE_HEAP_ALLOCATION */
 
    // temp2 point to end of 1st dim array i.e. start of 2nd dim
    generateRegRegInstruction(TR::InstOpCode::MOVRegReg(),  node, temp2Reg, targetReg, cg);
@@ -1652,16 +1647,7 @@ static TR::Register * generateMultianewArrayWithInlineAllocators(TR::Node *node,
    if (isOffHeapAllocationEnabled)
       {
       // Populate dataAddr slot for 2nd dimension zero size array.
-      generateRegMemInstruction(TR::InstOpCode::LEARegMem(),
-         node,
-         temp3Reg,
-         generateX86MemoryReference(temp2Reg, TR::Compiler->om.discontiguousArrayHeaderSizeInBytes(), cg),
-         cg);
-      generateMemRegInstruction(TR::InstOpCode::SMemReg(),
-         node,
-         generateX86MemoryReference(temp2Reg, fej9->getOffsetOfDiscontiguousDataAddrField(), cg),
-         temp3Reg,
-         cg);
+      generateMemImmInstruction(TR::InstOpCode::S8MemImm4, node, generateX86MemoryReference(temp2Reg, fej9->getOffsetOfDiscontiguousDataAddrField(), cg), 0, cg);
       }
 #endif /* J9VM_GC_SPARSE_HEAP_ALLOCATION */
 
@@ -1688,18 +1674,7 @@ static TR::Register * generateMultianewArrayWithInlineAllocators(TR::Node *node,
    generateRegInstruction(TR::InstOpCode::DEC4Reg, node, firstDimLenReg, cg);
    generateLabelInstruction(TR::InstOpCode::JA4, node, loopLabel, cg);
 
-#if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
-   if (isOffHeapAllocationEnabled)
-      {
-      // No offset is needed since 1st dimension array is contiguous.
-      generateRegRegInstruction(TR::InstOpCode::XOR4RegReg, node, temp3Reg, temp3Reg, cg);
-      generateLabelInstruction(TR::InstOpCode::JMP4, node, populateFirstDimDataAddrSlot, cg);
-      }
-   else
-#endif /* J9VM_GC_SPARSE_HEAP_ALLOCATION */
-      {
-      generateLabelInstruction(TR::InstOpCode::JMP4, node, doneLabel, cg);
-      }
+   generateLabelInstruction(TR::InstOpCode::JMP4, node, doneLabel, cg);
 
    TR::RegisterDependencyConditions  *deps = generateRegisterDependencyConditions((uint8_t)0, 13, cg);
 
@@ -1745,26 +1720,6 @@ static TR::Register * generateMultianewArrayWithInlineAllocators(TR::Node *node,
 
    generateLabelInstruction(TR::InstOpCode::label, node, oolJumpPoint, cg);
    generateLabelInstruction(TR::InstOpCode::JMP4, node, oolFailLabel, cg);
-
-#if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
-   if (isOffHeapAllocationEnabled)
-      {
-      /* Populate dataAddr slot of 1st dimension array. Arrays of non-zero size
-       * use contiguous header layout while zero size arrays use discontiguous header layout.
-       */
-      generateLabelInstruction(TR::InstOpCode::label, node, populateFirstDimDataAddrSlot, cg);
-      generateRegMemInstruction(TR::InstOpCode::LEARegMem(),
-         node,
-         temp2Reg,
-         generateX86MemoryReference(targetReg, temp3Reg, 0, TR::Compiler->om.contiguousArrayHeaderSizeInBytes(), cg),
-         cg);
-      generateMemRegInstruction(TR::InstOpCode::SMemReg(),
-         node,
-         generateX86MemoryReference(targetReg, temp3Reg, 0, fej9->getOffsetOfContiguousDataAddrField(), cg),
-         temp2Reg,
-         cg);
-      }
-#endif /* J9VM_GC_SPARSE_HEAP_ALLOCATION */
 
    generateLabelInstruction(TR::InstOpCode::label, node, doneLabel, deps, cg);
 
@@ -7480,10 +7435,12 @@ static void handleOffHeapDataForArrays(
     * runtime size checks are needed to determine whether to use contiguous or discontiguous header layout.
     *
     * In both scenarios, arrays of non-zero size use contiguous header layout while zero size arrays use
-    * discontiguous header layout.
+    * discontiguous header layout. DataAddr field of zero size arrays is intialized to NULL because they
+    * don't have any data elements.
     */
    TR::MemoryReference *dataAddrSlotMR = NULL;
    TR::MemoryReference *dataAddrMR = NULL;
+   TR::Register *zeroReg = NULL;
    if (TR::Compiler->om.compressObjectReferences() && NULL != sizeReg)
       {
       /* We need to check sizeReg at runtime to determine correct offset of dataAddr field.
@@ -7503,16 +7460,30 @@ static void handleOffHeapDataForArrays(
       generateRegRegInstruction(TR::InstOpCode::XOR4RegReg, node, discontiguousDataAddrOffsetReg, discontiguousDataAddrOffsetReg, cg);
       generateRegImmInstruction(TR::InstOpCode::CMPRegImm4(), node, sizeReg, 1, cg);
       generateRegImmInstruction(TR::InstOpCode::ADCRegImm4(), node, discontiguousDataAddrOffsetReg, 0, cg);
+
       dataAddrMR = generateX86MemoryReference(targetReg, discontiguousDataAddrOffsetReg, 3, TR::Compiler->om.contiguousArrayHeaderSizeInBytes(), cg);
       dataAddrSlotMR = generateX86MemoryReference(targetReg, discontiguousDataAddrOffsetReg, 3, fej9->getOffsetOfContiguousDataAddrField(), cg);
+      // Load first data element address
+      generateRegMemInstruction(TR::InstOpCode::LEARegMem(), node, tempReg, dataAddrMR, cg);
+
+      // Clear out tempReg if dealing with 0 length array
+      zeroReg = srm->findOrCreateScratchRegister();
+      generateRegRegInstruction(TR::InstOpCode::XOR4RegReg, node, zeroReg, zeroReg, cg);
+      generateRegImmInstruction(TR::InstOpCode::CMPRegImm4(), node, sizeReg, 0, cg);
+      generateRegRegInstruction(TR::InstOpCode::CMOVERegReg(), node, tempReg, zeroReg, cg);
+      srm->reclaimScratchRegister(zeroReg);
+
+      // Write first data element address to dataAddr slot
+      generateMemRegInstruction(TR::InstOpCode::SMemReg(), node, dataAddrSlotMR, tempReg, cg);
+      srm->reclaimScratchRegister(discontiguousDataAddrOffsetReg);
       }
    else if (NULL == sizeReg && node->getFirstChild()->getOpCode().isLoadConst() && node->getFirstChild()->getInt() == 0)
       {
       if (comp->getOption(TR_TraceCG))
          traceMsg(comp, "Node (%p): Dealing with full/compressed refs fixed length zero size array.\n", node);
 
-      dataAddrMR = generateX86MemoryReference(targetReg, TR::Compiler->om.discontiguousArrayHeaderSizeInBytes(), cg);
       dataAddrSlotMR = generateX86MemoryReference(targetReg, fej9->getOffsetOfDiscontiguousDataAddrField(), cg);
+      generateMemImmInstruction(TR::InstOpCode::SMemImm4(), node, dataAddrSlotMR, 0, cg);
       }
    else
       {
@@ -7534,11 +7505,21 @@ static void handleOffHeapDataForArrays(
 
       dataAddrMR = generateX86MemoryReference(targetReg, TR::Compiler->om.contiguousArrayHeaderSizeInBytes(), cg);
       dataAddrSlotMR = generateX86MemoryReference(targetReg, fej9->getOffsetOfContiguousDataAddrField(), cg);
-      }
+      // Load first data element address
+      generateRegMemInstruction(TR::InstOpCode::LEARegMem(), node, tempReg, dataAddrMR, cg);
 
-   // write first data element address to dataAddr slot
-   generateRegMemInstruction(TR::InstOpCode::LEARegMem(), node, tempReg, dataAddrMR, cg);
-   generateMemRegInstruction(TR::InstOpCode::SMemReg(), node, dataAddrSlotMR, tempReg, cg);
+      if (!TR::Compiler->om.compressObjectReferences() && NULL != sizeReg)
+         {
+         // Clear out tempReg if dealing with 0 length array
+         zeroReg = srm->findOrCreateScratchRegister();
+         generateRegRegInstruction(TR::InstOpCode::XORRegReg(), node, zeroReg, zeroReg, cg);
+         generateRegImmInstruction(TR::InstOpCode::CMPRegImm4(), node, sizeReg, 0, cg);
+         generateRegRegInstruction(TR::InstOpCode::CMOVERegReg(), node, tempReg, zeroReg, cg);
+         srm->reclaimScratchRegister(zeroReg);
+         }
+      // Write first data element address to dataAddr slot
+      generateMemRegInstruction(TR::InstOpCode::SMemReg(), node, dataAddrSlotMR, tempReg, cg);
+      }
    }
 #endif /* J9VM_GC_SPARSE_HEAP_ALLOCATION */
 
@@ -10066,11 +10047,6 @@ inlineCompareAndSwapNative(
    if (TR::Compiler->om.canGenerateArraylets() && !node->isUnsafeGetPutCASCallOnNonArray())
       return false;
 
-   static char *disableCASInlining = feGetEnv("TR_DisableCASInlining");
-
-   if (disableCASInlining /* || comp->useCompressedPointers() */)
-      return false;
-
    // size = 4 --> CMPXCHG4
    // size = 8 --> if 64-bit -> CMPXCHG8
    //              else if proc supports CMPXCHG8B -> CMPXCHG8B
@@ -10372,7 +10348,8 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
    bool callWasInlined = false;
    TR::Compilation *comp = cg->comp();
 
-   static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+   bool disableCASInlining = !cg->getSupportsInlineUnsafeCompareAndSet();
+   bool disableCAEInlining = !cg->getSupportsInlineUnsafeCompareAndExchange();
 
    if (methodSymbol)
       {
@@ -10455,20 +10432,20 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
             return false; // Call the native version of NativeThread.current()
          case TR::sun_misc_Unsafe_compareAndSwapInt_jlObjectJII_Z:
             {
-            if (node->isSafeForCGToFastPathUnsafeCall())
+            if (!disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
                return inlineCompareAndSwapNative(node, 4, false, false, cg);
             }
             break;
          case TR::sun_misc_Unsafe_compareAndSwapLong_jlObjectJJJ_Z:
             {
-            if (node->isSafeForCGToFastPathUnsafeCall())
+            if (!disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
                return inlineCompareAndSwapNative(node, 8, false, false, cg);
             }
             break;
          case TR::sun_misc_Unsafe_compareAndSwapObject_jlObjectJjlObjectjlObject_Z:
             {
             static bool useOldCompareAndSwapObject = (bool)feGetEnv("TR_UseOldCompareAndSwapObject");
-            if (node->isSafeForCGToFastPathUnsafeCall())
+            if (!disableCASInlining && node->isSafeForCGToFastPathUnsafeCall())
                {
                if (useOldCompareAndSwapObject)
                   return inlineCompareAndSwapNative(node, TR::Compiler->om.sizeofReferenceField(), true, false, cg);
@@ -10482,13 +10459,13 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
             break;
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
             {
-            if (!disableCAEIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
+            if (!disableCAEInlining && node->isSafeForCGToFastPathUnsafeCall())
                return inlineCompareAndSwapNative(node, 4, false, true, cg);
             }
             break;
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
             {
-            if (!disableCAEIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
+            if (!disableCAEInlining && node->isSafeForCGToFastPathUnsafeCall())
                return inlineCompareAndSwapNative(node, 8, false, true, cg);
             }
             break;
@@ -10496,7 +10473,7 @@ bool J9::X86::TreeEvaluator::VMinlineCallEvaluator(
          case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
             {
             static bool useOldCompareAndSwapObject = (bool)feGetEnv("TR_UseOldCompareAndSwapObject");
-            if (!disableCAEIntrinsic && node->isSafeForCGToFastPathUnsafeCall())
+            if (!disableCAEInlining && node->isSafeForCGToFastPathUnsafeCall())
                {
                if (useOldCompareAndSwapObject)
                   return inlineCompareAndSwapNative(node, TR::Compiler->om.sizeofReferenceField(), true, true, cg);

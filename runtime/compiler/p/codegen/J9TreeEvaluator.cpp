@@ -6510,7 +6510,7 @@ TR::Register *J9::Power::TreeEvaluator::VMnewEvaluator(TR::Node *node, TR::CodeG
                TR_ASSERT_FATAL_WITH_NODE(node,
                   (fej9->getOffsetOfDiscontiguousDataAddrField() - fej9->getOffsetOfContiguousDataAddrField()) == 8,
                   "Offset of dataAddr field in discontiguous array is expected to be 8 bytes more than contiguous array. "
-                  "But was %d bytes for discontigous and %d bytes for contiguous array.\n",
+                  "But was %d bytes for discontiguous and %d bytes for contiguous array.\n",
                   fej9->getOffsetOfDiscontiguousDataAddrField(), fej9->getOffsetOfContiguousDataAddrField());
 
                iCursor = generateTrg1Src1Instruction(cg, TR::InstOpCode::cntlzd, node, offsetReg, enumReg, iCursor);
@@ -10768,7 +10768,25 @@ static TR::Register *inlineIntrinsicIndexOf_P10(TR::Node *node, TR::CodeGenerato
       generateTrg1Src2Instruction(cg, TR::InstOpCode::add, node, endPos, endPos, endPos);
       }
 
-   generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, arrAddress, array, TR::Compiler->om.contiguousArrayHeaderSizeInBytes());
+   /*
+    * Determine the address of the first byte to read either by loading from dataAddr or adding the header size.
+    * This is followed by adding in the offset.
+    */
+#if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
+   if (TR::Compiler->om.isOffHeapAllocationEnabled())
+      {
+      generateTrg1MemInstruction(
+         cg, TR::InstOpCode::ld, node, arrAddress,
+         TR::MemoryReference::createWithDisplacement(
+            cg, array, TR::Compiler->om.offsetOfContiguousDataAddrField(), 8)
+         );
+      }
+   else
+#endif /* J9VM_GC_SPARSE_HEAP_ALLOCATION */
+      {
+      generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, arrAddress, array,
+                                     TR::Compiler->om.contiguousArrayHeaderSizeInBytes());
+      }
 
    // match first byte
    generateTrg1MemInstruction(cg, scalarLoadOp, node, temp, TR::MemoryReference::createWithIndexReg(cg, position, arrAddress, isLatin1 ? 1 : 2));
@@ -10954,7 +10972,26 @@ static TR::Register *inlineIntrinsicIndexOf(TR::Node *node, TR::CodeGenerator *c
    if (node->getChild(firstCallArgIdx+3)->getReferenceCount() == 1)
       srm->donateScratchRegister(length);
 
-   generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, arrAddress, array, TR::Compiler->om.contiguousArrayHeaderSizeInBytes());
+   /*
+    * Determine the address of the first byte to read either by loading from dataAddr or adding the header size.
+    * This is followed by adding in the offset.
+    */
+#if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
+   if (TR::Compiler->om.isOffHeapAllocationEnabled())
+      {
+      generateTrg1MemInstruction(
+         cg, TR::InstOpCode::ld, node, arrAddress,
+         TR::MemoryReference::createWithDisplacement(
+            cg, array, TR::Compiler->om.offsetOfContiguousDataAddrField(), 8)
+         );
+      }
+   else
+#endif /* J9VM_GC_SPARSE_HEAP_ALLOCATION */
+      {
+      generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::addi, node, arrAddress, array,
+                                     TR::Compiler->om.contiguousArrayHeaderSizeInBytes());
+      }
+
    if (node->getChild(firstCallArgIdx)->getReferenceCount() == 1)
       srm->donateScratchRegister(array);
 
@@ -11315,6 +11352,11 @@ static bool inlineIntrinsicInflate(TR::Node *node, TR::CodeGenerator *cg)
    /* If remainingReg equals 0, there is no work to be done. Immediate jump to the end. */
    generateTrg1Src1ImmInstruction(cg, TR::InstOpCode::cmpi4, node, condReg, remainingReg, 0);
    generateConditionalBranchInstruction(cg, TR::InstOpCode::beq, node, doneLabel, condReg);
+
+   // IMPORTANT: The upper 32 bits of a 64-bit register containing an int are undefined. Since the
+   // indices are being passed in as ints, we must ensure that their upper 32 bits are not garbage.
+   generateTrg1Src1Instruction(cg, TR::InstOpCode::extsw, node, inputOffsetReg, inputOffsetReg);
+   generateTrg1Src1Instruction(cg, TR::InstOpCode::extsw, node, outputOffsetReg, outputOffsetReg);
 
    /*
     * Determine the address of the first byte to read either by loading from dataAddr or adding the header size.
@@ -11900,9 +11942,29 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
       }
    else if (methodSymbol)
       {
-      static bool disableCAEIntrinsic = feGetEnv("TR_DisableCAEIntrinsic") != NULL;
+      bool disableCASInlining = !cg->getSupportsInlineUnsafeCompareAndSet();
+      bool disableCAEInlining = !cg->getSupportsInlineUnsafeCompareAndExchange();
+      static bool disableOSW = feGetEnv("TR_noPauseOnSpinWait") != NULL;
       switch (methodSymbol->getRecognizedMethod())
          {
+      case TR::java_lang_Thread_onSpinWait:
+         {
+         if (!disableOSW)
+            {
+            if (comp->getOption(TR_TraceCG))
+               {
+               traceMsg(comp, "Inlining Thread.onSpinWait call node %p as yield instruction.\n", node);
+               }
+
+            /*
+             * onSpinWait() method calls VM_AtomicSupport::yieldCPU() which is a yield instruction encoded as "or r27, r27, r27".
+             * Check omr/include_core/AtomicSupport.hpp for the JNI implementation.
+             */
+            generateInstruction(cg, TR::InstOpCode::yield, node);
+            return true;
+            }
+         break;
+         }
       case TR::java_util_concurrent_ConcurrentLinkedQueue_tmOffer:
          {
          if (cg->getSupportsInlineConcurrentLinkedQueue())
@@ -12189,8 +12251,11 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
 
         if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = VMinlineCompareAndSetOrExchange(node, cg, 4, false);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = VMinlineCompareAndSetOrExchange(node, cg, 4, false);
+               return true;
+               }
             }
          break;
 
@@ -12203,13 +12268,19 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
 
          if (comp->target().is64Bit() && (node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = VMinlineCompareAndSetOrExchange(node, cg, 8, false);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = VMinlineCompareAndSetOrExchange(node, cg, 8, false);
+               return true;
+               }
             }
          else if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = inlineAtomicOperation(node, cg, methodSymbol);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = inlineAtomicOperation(node, cg, methodSymbol);
+               return true;
+               }
             }
          break;
 
@@ -12220,15 +12291,18 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
 
          if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            resultReg = VMinlineCompareAndSetOrExchangeReference(node, cg, false);
-            return true;
+            if (!disableCASInlining)
+               {
+               resultReg = VMinlineCompareAndSetOrExchangeReference(node, cg, false);
+               return true;
+               }
             }
          break;
 
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeInt:
         if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (!disableCAEIntrinsic)
+            if (!disableCAEInlining)
                {
                resultReg = VMinlineCompareAndSetOrExchange(node, cg, 4, true);
                return true;
@@ -12239,7 +12313,7 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeLong:
         if (comp->target().is64Bit() && (node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (!disableCAEIntrinsic)
+            if (!disableCAEInlining)
                {
                resultReg = VMinlineCompareAndSetOrExchange(node, cg, 8, true);
                return true;
@@ -12259,7 +12333,7 @@ J9::Power::CodeGenerator::inlineDirectCall(TR::Node *node, TR::Register *&result
       case TR::jdk_internal_misc_Unsafe_compareAndExchangeReference:
          if ((node->isUnsafeGetPutCASCallOnNonArray() || !TR::Compiler->om.canGenerateArraylets()) && node->isSafeForCGToFastPathUnsafeCall())
             {
-            if (!disableCAEIntrinsic)
+            if (!disableCAEInlining)
                {
                resultReg = VMinlineCompareAndSetOrExchangeReference(node, cg, true);
                return true;

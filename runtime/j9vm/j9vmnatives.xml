@@ -193,7 +193,10 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-ex
 		<export name="_JVM_HoldsLock@12"/>
 		<export name="_JVM_InitProperties@8"/>
 		<export name="_JVM_ArrayCopy@28"/>
-		<export name="_JVM_DoPrivileged@20"/>
+		<export name="_JVM_DoPrivileged@20">
+			<include-if condition="spec.win_.*"/>
+			<exclude-if condition="spec.java9"/>
+		</export>
 		<export name="_JVM_IHashCode@8"/>
 		<export name="_JVM_Clone@8"/>
 		<export name="_JVM_CompileClass@12"/>
@@ -328,7 +331,7 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-ex
 		<export name="AsyncGetCallTrace"/>
 
 		<!-- Additions for Valhalla -->
-		<export name="JVM_IsValhallaEnabled">
+		<export name="JVM_IsFlatArray">
 			<include-if condition="spec.flags.opt_valhallaValueTypes"/>
 		</export>
 		<export name="JVM_IsImplicitlyConstructibleClass">
@@ -337,7 +340,16 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-ex
 		<export name="JVM_IsNullRestrictedArray">
 			<include-if condition="spec.flags.opt_valhallaValueTypes"/>
 		</export>
+		<export name="JVM_IsValhallaEnabled">
+			<include-if condition="spec.flags.opt_valhallaValueTypes"/>
+		</export>
+		<export name="JVM_NewNullableAtomicArray">
+			<include-if condition="spec.flags.opt_valhallaValueTypes"/>
+		</export>
 		<export name="JVM_NewNullRestrictedArray">
+			<include-if condition="spec.flags.opt_valhallaValueTypes"/>
+		</export>
+		<export name="JVM_NewNullRestrictedAtomicArray">
 			<include-if condition="spec.flags.opt_valhallaValueTypes"/>
 		</export>
 		<export name="JVM_VirtualThreadHideFrames">
@@ -440,19 +452,6 @@ SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-ex
 		<export name="JVM_IsContinuationsSupported"/>
 		<export name="JVM_IsPreviewEnabled"/>
 		<export name="JVM_RegisterContinuationMethods"/>
-		<!-- Removed in Java 21. -->
-		<export name="JVM_VirtualThreadMountBegin">
-			<exclude-if condition="spec.java21"/>
-		</export>
-		<export name="JVM_VirtualThreadMountEnd">
-			<exclude-if condition="spec.java21"/>
-		</export>
-		<export name="JVM_VirtualThreadUnmountBegin">
-			<exclude-if condition="spec.java21"/>
-		</export>
-		<export name="JVM_VirtualThreadUnmountEnd">
-			<exclude-if condition="spec.java21"/>
-		</export>
 	</exports>
 
 	<exports group="jdk20">
