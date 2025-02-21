@@ -543,6 +543,7 @@ public class Main implements Constants {
 
 					Method setTag = fileAttributeClass.getMethod("setTag", String.class, fileAttributeTagClass);
 					setTag.invoke(null, file.getPath().toString(), tag);
+					System.out.println("J9VMCONSTANTPOOLS TAGGED");
 				} catch (Exception e) {
 					System.err.println("Reflection error while trying to set FileAttribute.Tag");
 				}
