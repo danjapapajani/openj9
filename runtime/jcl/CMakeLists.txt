@@ -65,6 +65,13 @@ add_custom_command(
 	VERBATIM
 	WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
+
+if(OMR_OS_ZOS)
+	set(tag_constantpool_files chtag -t -c ISO8859-1 ${CONST_POOL_OUT_DIR}/j9vmconstantpool.c ${CONST_POOL_OUT_DIR}/j9vmconstantpool.h)
+else()
+	set(tag_constantpool_files "true")
+endif()
+
 add_custom_command(
 	OUTPUT
 		${gen_constpool_files}
@@ -75,6 +82,7 @@ add_custom_command(
 			-outputDir "${CONST_POOL_OUT_DIR}"
 			-cmakeCache "${CMAKE_CURRENT_BINARY_DIR}/parsed_cache.txt"
 			-version ${JAVA_SPEC_VERSION}
+	COMMAND ${tag_constantpool_files}
 	VERBATIM
 	DEPENDS
 		${j9vm_SOURCE_DIR}/oti/vmconstantpool.xml
