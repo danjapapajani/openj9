@@ -2870,6 +2870,7 @@ preloadLibrary(char* dllName, BOOLEAN inJVMDir)
 		}
 	}
 #endif /* defined(AIXPPC) */
+fprintf(stdout,"Buffer before error: %s\n", jvmBufferData(buffer));
 	if (handle == NULL) {
 		fprintf(stderr,"libjvm.so preloadLibrary(%s): %s\n", buffer->data, dlerror());
 	}
