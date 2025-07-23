@@ -2834,7 +2834,6 @@ preloadLibrary(char* dllName, BOOLEAN inJVMDir)
 	} else {
 		buffer = jvmBufferCat(buffer, jvmBufferData(jrebinBuffer));
 	}
-	fprintf(stdout,"Buffer buffer early in preload: %s\n", jvmBufferData(buffer));
 #ifdef WIN32
 	buffer = jvmBufferCat(buffer, "\\");
 	buffer = jvmBufferCat(buffer, dllName);
@@ -2879,7 +2878,6 @@ preloadLibrary(char* dllName, BOOLEAN inJVMDir)
 	buffer = jvmBufferCat(buffer, "/lib");
 	buffer = jvmBufferCat(buffer, dllName);
 	buffer = jvmBufferCat(buffer, ".so");
-	fprintf(stdout,"Buffer reads as: %s\n", jvmBufferData(buffer)); //ok so it gets to here, that other one above is the one that spits that output, returns a non-null handle
 	handle = (void*)dllload(jvmBufferData(buffer));
 	if (handle == NULL) {
 		perror("libjvm.so preloadLibrary: dllload() failed");
