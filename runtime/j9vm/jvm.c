@@ -2834,6 +2834,7 @@ preloadLibrary(char* dllName, BOOLEAN inJVMDir)
 	} else {
 		buffer = jvmBufferCat(buffer, jvmBufferData(jrebinBuffer));
 	}
+	fprintf(stdout,"Buffer buffer early in preload: %s\n", jvmBufferData(buffer));
 #ifdef WIN32
 	buffer = jvmBufferCat(buffer, "\\");
 	buffer = jvmBufferCat(buffer, dllName);
@@ -2870,7 +2871,6 @@ preloadLibrary(char* dllName, BOOLEAN inJVMDir)
 		}
 	}
 #endif /* defined(AIXPPC) */
-fprintf(stdout,"Buffer before error: %s\n", jvmBufferData(buffer));
 	if (handle == NULL) {
 		fprintf(stderr,"libjvm.so preloadLibrary(%s): %s\n", buffer->data, dlerror());
 	}
