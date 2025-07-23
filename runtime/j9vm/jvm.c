@@ -2878,6 +2878,7 @@ preloadLibrary(char* dllName, BOOLEAN inJVMDir)
 	buffer = jvmBufferCat(buffer, "/lib");
 	buffer = jvmBufferCat(buffer, dllName);
 	buffer = jvmBufferCat(buffer, ".so");
+	fprintf(stdout,"Buffer reads as: %s\n", buffer);
 	handle = (void*)dllload(jvmBufferData(buffer));
 	if (handle == NULL) {
 		perror("libjvm.so preloadLibrary: dllload() failed");
