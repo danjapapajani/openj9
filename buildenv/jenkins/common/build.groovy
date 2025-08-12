@@ -337,7 +337,7 @@ def build() {
 }
 
 def get_compile_command() {
-    return "make ${EXTRA_MAKE_OPTIONS} images"
+    return "make ${EXTRA_MAKE_OPTIONS} all"
 }
 
 def archive_sdk() {
