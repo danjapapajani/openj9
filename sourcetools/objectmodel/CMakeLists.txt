@@ -86,11 +86,3 @@ add_jar(objectmodel
 
 	OUTPUT_NAME om
 )
-
-add_custom_command(TARGET objectmodel POST_BUILD
-  COMMAND /bin/sh -lc [=[
-    f=$(find "${CMAKE_BINARY_DIR}/vm/sourcetools" -path "*/CMakeFiles/objectmodel.dir/java_sources" -print -quit)
-    echo "java_sources path: $f"
-  ]=]
-)
-
