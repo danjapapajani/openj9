@@ -37,8 +37,21 @@ endif()
 
 set(CMAKE_JAVA_COMPILE_FLAGS -nowarn)
 
+message(STATUS "CMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}")
+message(STATUS "CMAKE_CURRENT_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}")
+message(STATUS "CMAKE_JAVA_TARGET_OUTPUT_DIR=${CMAKE_JAVA_TARGET_OUTPUT_DIR}")
+message(STATUS "CMAKE_JAVA_INCLUDE_PATH_FINAL=${CMAKE_JAVA_INCLUDE_PATH_FINAL}")
+message(STATUS "CMAKE_JAVA_COMPILE_FLAGS=${CMAKE_JAVA_COMPILE_FLAGS}")
+
 # Note add_jar isn't as good at tracking target dependencies as regular cmake.
 # In particular it will not let you link against a target which will be defined later.
 add_subdirectory(objectmodel)
+add_custom_target(list_dir ALL
+    COMMAND ls -T ${CMAKE_JAVA_TARGET_OUTPUT_DIR}/CMakeFiles/objectmodel.dir/java_sources
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Listing directory with tags"
+    VERBATIM
+)
+
 add_subdirectory(j9constantpool)
 add_subdirectory(j9nls)
