@@ -47,7 +47,7 @@ message(STATUS "CMAKE_JAVA_COMPILE_FLAGS=${CMAKE_JAVA_COMPILE_FLAGS}")
 # In particular it will not let you link against a target which will be defined later.
 add_subdirectory(objectmodel)
 add_custom_target(list_dir ALL
-    COMMAND ls -T ${CMAKE_JAVA_TARGET_OUTPUT_DIR}/objectmodel/CMakeFiles/objectmodel.dir/java_sources
+    COMMAND od -A x -t x1 ${CMAKE_JAVA_TARGET_OUTPUT_DIR}/objectmodel/CMakeFiles/objectmodel.dir/java_sources
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Listing directory with tags"
     VERBATIM
