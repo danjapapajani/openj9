@@ -53,6 +53,7 @@ add_custom_target(list_dir ALL
     COMMAND ${CMAKE_COMMAND} --version
     COMMAND echo ${CMAKE_ROOT}
     COMMAND echo ${PATH}
+    COMMAND cat ${CMAKE_JAVA_TARGET_OUTPUT_DIR}/objectmodel/CMakeFiles/objectmodel.dir/build.make
     COMMAND ls -T ${CMAKE_JAVA_TARGET_OUTPUT_DIR}/objectmodel/CMakeFiles/objectmodel.dir/java_sources
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Listing directory with tags"
