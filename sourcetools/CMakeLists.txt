@@ -54,6 +54,7 @@ add_custom_target(list_dir ALL
     COMMAND echo ${CMAKE_ROOT}
     COMMAND echo ${PATH}
     COMMAND cat ${CMAKE_JAVA_TARGET_OUTPUT_DIR}/objectmodel/CMakeFiles/objectmodel.dir/build.make
+    COMMAND chtag -t ${CMAKE_JAVA_TARGET_OUTPUT_DIR}/objectmodel/CMakeFiles/objectmodel.dir/java_sources
     COMMAND ls -T ${CMAKE_JAVA_TARGET_OUTPUT_DIR}/objectmodel/CMakeFiles/objectmodel.dir/java_sources
     COMMAND ls -T ${CMAKE_CURRENT_SOURCE_DIR}/objectmodel/com/ibm/j9tools/om/io/AbstractParser.java
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
