@@ -22,13 +22,18 @@
 package com.ibm.oti.NLSTool;
 
 import java.io.BufferedReader;
+import java.nio.charset.Charset;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.InputStreamReader;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.Iterator;
@@ -76,6 +81,19 @@ public class J9NLS implements NLSConstants {
 
 	public J9NLS() {
 	}
+
+   /*
+    * On z/OS, generated source files must be written and compared using
+    * IBM-1047 (EBCDIC). On all other platforms, use the JVM default charset.
+    *
+    * This constant centralizes the platform-specific charset choice so that
+    * all file reads/writes are consistent and do not rely on implicit defaults.
+    *
+    */
+    private static final Charset FILE_CHARSET = 
+            "z/OS".equals(System.getProperty("os.name"))
+            ? Charset.forName("IBM-1047")
+            : Charset.defaultCharset();
 
 	private void runMain(String[] args) {
 		boolean palmMode = false;
@@ -551,10 +569,10 @@ public class J9NLS implements NLSConstants {
 			
 			if (differentFromCopyOnDisk(headerPath + headerBuffer.getHeaderName(), buffer)){
 				File headerFile = new File(headerPath + headerBuffer.getHeaderName());
-				FileWriter headerFileWriter = new FileWriter(headerFile);
-				headerFileWriter.write(headerBuffer.toString());
+                try (Writer headerFileWriter = new OutputStreamWriter(new FileOutputStream(headerFile), FILE_CHARSET)) {
+                     headerFileWriter.write(headerBuffer.toString());
+                }
 				headerHashtable.put(headerPath + headerBuffer.getHeaderName(), headerBuffer);
-				headerFileWriter.close();
 				dp("** Generated " + headerFile.getPath());
 				totalHeaderFilesCreated++;
 			}else{
@@ -834,24 +852,22 @@ public class J9NLS implements NLSConstants {
 		}
 				
 		StringBuffer fileBuffer = new StringBuffer();
-		FileReader fr = new FileReader(fileOnDisk);
-		char []charArray = new char[1024];
-		
-		int numRead = -1;
-		while ( (numRead = fr.read(charArray)) != -1 ) {
-			fileBuffer.append(charArray, 0, numRead);
+		try (Reader fr = new InputStreamReader(new FileInputStream(fileOnDisk), FILE_CHARSET)) {
+			char[] charArray = new char[1024];
+			int numRead = -1;
+			while ((numRead = fr.read(charArray)) != -1) {
+				fileBuffer.append(charArray, 0, numRead);
+			}
 		}
-				
+
 		if ( buffer.toString().equals(fileBuffer.toString()) ) {
-			fr.close();
 			return false;
 		}
 		
-		fr.close();
 		
 		//delete file here, will write new file later
 		fileOnDisk.delete();
-		
+
 		return true;
 	}
 	
